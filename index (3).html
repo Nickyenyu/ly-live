@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>逐字稿與會議記錄工作台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* 版面：一屏三欄（直播與控制｜逐字稿｜摘要在上、翻譯在下），各欄獨立捲動 */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --line:#d5dbe2; --ink:#16202b; --muted:#5a6775;
+  --accent:#1f4e8c; --accent-ink:#ffffff; --live:#c2352b; --warn-bg:#fff3d6; --warn-ink:#6b4a00; --ok:#1d7a46;
+  --display:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme:dark;
+    --bg:#0f141a; --surface:#182029; --line:#2b3642; --ink:#e7ecf1; --muted:#94a1ae;
+    --accent:#7db1ee; --accent-ink:#0c1826; --live:#ff7366; --warn-bg:#3a2e10; --warn-ink:#ffd98a; --ok:#6fd39a;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.65;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--surface)}
+h1{font-family:var(--display);font-size:19px;margin:0;letter-spacing:.04em}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:3px 11px;border-radius:99px;border:1px solid var(--line);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pill i{width:9px;height:9px;border-radius:50%;background:var(--muted);display:block}
+.pill.on{color:var(--live);border-color:var(--live);font-weight:700}
+.pill.on i{background:var(--live);animation:pulse 1.2s infinite}
+.pill.cut{color:var(--warn-ink);background:var(--warn-bg);border-color:transparent;font-weight:700}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.pill.on i{animation:none}}
+header .sp{flex:1}
+header small{color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+#banner{display:none;margin:10px 18px 0;padding:11px 14px;border-radius:8px;background:var(--warn-bg);color:var(--warn-ink);font-weight:500}
+#banner.show{display:block}
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(300px,360px) minmax(0,1.2fr) minmax(0,1fr);gap:14px;padding:14px 18px 18px}
+.col{background:var(--surface);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.col h2{font-family:var(--display);font-size:16px;margin:0;display:flex;align-items:baseline;gap:8px}
+.col h2 b{color:var(--accent);font-family:var(--body);font-size:12px;border:1px solid currentColor;border-radius:4px;padding:0 6px;line-height:1.5}
+.head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 14px;border-bottom:1px solid var(--line)}
+.head .sp{flex:1}
+.body{flex:1;min-height:0;overflow-y:auto;padding:12px 14px}
+#right{background:none;border:0;border-radius:0;gap:14px;overflow:visible}
+#right .col{flex:1}
+label{display:block;font-size:13px;font-weight:700;margin:14px 0 5px}
+label:first-child{margin-top:0}
+input[type=url],input[type=text],input[type=password],select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 9px}
+textarea{resize:vertical;min-height:64px}
+button,a.btn{font:inherit;font-size:13.5px;font-weight:500;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:7px;padding:5px 11px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+button:hover,a.btn:hover{border-color:var(--accent);color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700;padding:10px 12px;font-size:15px;flex:2}
+button.primary:hover{color:var(--accent-ink);filter:brightness(1.1)}
+button.stop{flex:1;padding:8px 12px;border-color:var(--live);color:var(--live)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row > input{flex:1;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips label{margin:0;font-weight:400;font-size:13px;border:1px solid var(--line);border-radius:99px;padding:2px 10px;cursor:pointer;display:inline-flex;gap:5px;align-items:center}
+.chips input{accent-color:var(--accent);margin:0}
+.hint{font-size:12.5px;color:var(--muted);margin:5px 0 0}
+.hint.ok{color:var(--ok)} .hint.bad{color:var(--live)}
+#player{aspect-ratio:16/9;width:100%;background:#000;border-radius:8px;margin-top:10px;display:grid;place-items:center;color:#9aa6b2;font-size:13px;text-align:center;padding:0;overflow:hidden}
+#player iframe{width:100%;height:100%;border:0;display:block}
+#player span{padding:12px}
+ol.steps{margin:0;padding-left:1.3em;color:var(--muted);font-size:13.5px}
+ol.steps li{margin-bottom:6px}
+ol.steps strong{color:var(--ink)}
+details{margin-top:16px;border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-size:13px;font-weight:700}
+.seg,.tr{display:grid;grid-template-columns:68px 1fr;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.seg time,.tr time{color:var(--accent);font-size:12.5px;font-variant-numeric:tabular-nums;padding-top:2px}
+.seg p{margin:0;font-size:16px;line-height:1.75;overflow-wrap:anywhere}
+.seg p b.sp{display:inline-block;font-size:12.5px;font-weight:700;color:var(--accent);border:1px solid currentColor;border-radius:4px;padding:0 6px;margin-right:8px;line-height:1.6;vertical-align:2px}
+#partial{color:var(--muted);font-style:italic;padding:8px 0 4px 78px;min-height:1.6em;font-size:16px}
+#summary,#minutes{white-space:pre-wrap;font-size:14.5px;overflow-wrap:anywhere}
+.secdiv{margin:14px 0 4px;padding:6px 10px;border-left:4px solid var(--accent);background:var(--bg);border-radius:0 6px 6px 0;font-weight:700;font-size:14px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.secdiv small{font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
+button.tab.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+input[type=file]{width:100%;font:inherit;font-size:13px;color:var(--ink)}
+.tr div p{margin:0 0 3px;font-size:14px;overflow-wrap:anywhere}
+.tr div p span{color:var(--muted);font-size:11.5px;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px}
+.empty{color:var(--muted);font-size:14px}
+.meta{font-size:12px;color:var(--muted)}
+@media (max-width:1000px){
+  body{display:block}
+  main{grid-template-columns:1fr;padding:12px 16px}
+  .col{min-height:320px;max-height:80vh}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>逐字稿與會議記錄工作台</h1>
+  <span class="pill" id="status"><i></i><span id="statusText">待命</span></span>
+  <span class="sp"></span>
+  <small id="counts">逐字稿 0 字</small>
+</header>
+
+<div id="banner" role="alert"></div>
+
+<main>
+  <!-- ① 直播與控制 -->
+  <section class="col" aria-labelledby="h-src">
+    <div class="head"><h2 id="h-src"><b>1</b>輸入來源</h2></div>
+    <div class="body">
+      <label for="url">YouTube 直播網址</label>
+      <div class="row">
+        <input type="url" id="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
+        <button id="loadBtn" type="button">載入</button>
+      </div>
+      <div id="player"><span>貼上網址並按「載入」，直播會在這裡播放。</span></div>
+      <p class="hint" id="playerHint">聲音直接從分頁擷取，不經過麥克風，旁邊有人講話不會被收進去。</p>
+
+      <label for="srcMode">聲音來源</label>
+      <select id="srcMode">
+        <option value="self">這一頁的播放器</option>
+        <option value="other">另一個分頁（播放器無法播放時）</option>
+        <option value="mic">現場收音（這台電腦的麥克風）</option>
+      </select>
+      <div class="chips" style="margin-top:8px"><label><input type="checkbox" id="keepRec">保留錄音，停止後可下載</label></div>
+      <p class="hint" id="recOut" hidden><a class="btn" id="recLink">下載這次的錄音</a></p>
+
+      <div class="row" style="margin-top:14px">
+        <button class="primary" id="startBtn" type="button">開始轉錄</button>
+        <button class="stop" id="stopBtn" type="button" disabled>停止</button>
+      </div>
+      <p class="hint">按下後 Chrome 會詢問是否分享分頁，請確認<strong>「同時分享分頁音訊」有打勾</strong>再按分享。</p>
+
+      <label for="secTitle">分段（換下一位委員或下一個議程時使用）</label>
+      <div class="row">
+        <input type="text" id="secTitle" placeholder="例：王委員質詢" autocomplete="off">
+        <button id="secBtn" type="button">開始新分段</button>
+      </div>
+      <div class="chips" style="margin-top:8px"><label><input type="checkbox" id="autoSec" checked>停止後再開始時自動分段</label></div>
+      <p class="hint">轉錄進行中也可以按，不必先停止。每一段有各自的摘要。</p>
+
+      <label for="file">或上傳錄音／影片檔</label>
+      <input type="file" id="file" accept="audio/*,video/*">
+      <div class="row" style="margin-top:8px">
+        <button id="fileBtn" type="button">轉錄這個檔案</button>
+        <button id="fileStop" type="button" hidden>取消</button>
+      </div>
+      <p class="hint" id="fileNote">需要 Gemini 金鑰。每 60 秒切一段辨識，一小時的錄音約需 8 分鐘。建議 2 小時、500 MB 以內。</p>
+
+      <label for="engine">直播辨識引擎</label>
+      <select id="engine">
+        <option value="hybrid">即時預覽＋Gemini 校正，標示發言者（建議，需金鑰）</option>
+        <option value="chrome">只用 Chrome 即時辨識（不需金鑰，無標點）</option>
+        <option value="gemini">只用 Gemini 分段辨識，標示發言者（每 30 秒出一段）</option>
+      </select>
+      <p class="hint">建議選項會先顯示即時文字，每 30 秒換成 Gemini 校正過、有標點的正式稿。</p>
+
+      <label for="lang">直播語言</label>
+      <select id="lang">
+        <option value="cmn-Hant-TW">中文（台灣）</option>
+        <option value="en-US">English</option>
+        <option value="ja-JP">日本語</option>
+        <option value="ko-KR">한국어</option>
+      </select>
+
+      <label for="every">摘要更新頻率</label>
+      <select id="every">
+        <option value="120">每 2 分鐘</option>
+        <option value="180" selected>每 3 分鐘</option>
+        <option value="300">每 5 分鐘</option>
+        <option value="0">只在我按下時更新</option>
+      </select>
+
+      <label>翻譯語言（可複選，不選就不翻譯）</label>
+      <div class="chips" id="langs"></div>
+
+      <label for="glossary">專有名詞表（委員、官員、法案名稱）</label>
+      <textarea id="glossary" placeholder="例：衛福部石部長、健保署、發展觀光條例、王委員…"></textarea>
+
+      <label for="key">Gemini API 金鑰（摘要與翻譯用）</label>
+      <div class="row">
+        <input type="password" id="key" placeholder="AIza…" autocomplete="off">
+        <button id="testBtn" type="button">測試</button>
+      </div>
+      <p class="hint" id="keyNote">到 aistudio.google.com/apikey 免費申請。金鑰只存在這台電腦的瀏覽器裡。</p>
+      <label for="model">Gemini 模型</label>
+      <input type="text" id="model" value="gemini-3.5-flash-lite" autocomplete="off">
+      <p class="hint" id="quota">今日已用 0 次請求（免費額度約每日 500 次）。</p>
+
+      <details>
+        <summary>改貼文字（已有逐字稿時）</summary>
+        <textarea id="paste" placeholder="貼上逐字稿，加入後可直接產生摘要。" style="margin-top:8px;min-height:90px"></textarea>
+        <button id="pasteBtn" type="button" style="margin-top:6px">加入逐字稿</button>
+      </details>
+    </div>
+  </section>
+
+  <!-- ② 逐字稿 -->
+  <section class="col" aria-labelledby="h-tx">
+    <div class="head">
+      <h2 id="h-tx"><b>2</b>逐字稿</h2><span class="sp"></span>
+      <button id="copyTx" type="button">複製</button>
+      <button id="saveBtn" type="button">下載 .md</button>
+      <button id="clearBtn" type="button">清空</button>
+    </div>
+    <div class="body" id="txBody">
+      <div id="txEmpty">
+        <p class="empty" style="margin-top:0">尚無逐字稿。使用順序：</p>
+        <ol class="steps">
+          <li>用電腦版 <strong>Chrome</strong> 開啟本頁。</li>
+          <li>貼上直播網址，按<strong>載入</strong>，確認左上角播放器有畫面、有聲音。</li>
+          <li>按<strong>開始轉錄</strong>，在 Chrome 的分享視窗選<strong>這個分頁</strong>，確認「同時分享分頁音訊」有打勾，按分享。</li>
+          <li>逐字稿會出現在這一欄；填好 Gemini 金鑰後，右側每幾分鐘更新摘要。</li>
+          <li>如果播放器顯示無法播放，把直播開在另一個分頁，「聲音來源」改選<strong>另一個分頁</strong>，分享時選那個分頁。</li>
+        </ol>
+      </div>
+      <div id="tx"></div>
+      <div id="partial"></div>
+    </div>
+  </section>
+
+  <!-- ③ 摘要 + 翻譯 -->
+  <div class="col" id="right">
+    <section class="col" aria-labelledby="h-sum">
+      <div class="head">
+        <h2 id="h-sum"><b>3</b></h2>
+        <button id="tabSum" class="tab on" type="button">摘要與建議</button>
+        <button id="tabMin" class="tab" type="button">會議記錄</button>
+        <span class="sp"></span>
+        <button id="sumBtn" type="button">立即更新</button>
+        <button id="copySum" type="button">複製</button>
+      </div>
+      <div class="body">
+        <select id="secSel" hidden style="margin-bottom:8px"></select>
+        <p class="meta" id="sumMeta">填入 Gemini 金鑰後，累積約 150 字逐字稿就會開始產生摘要。</p>
+        <div id="summary"></div>
+        <p class="meta" id="minMeta" hidden>按「產生會議記錄」，會依目前完整的逐字稿整理成正式記錄。</p>
+        <div id="minutes" hidden></div>
+      </div>
+    </section>
+    <section class="col" aria-labelledby="h-tr">
+      <div class="head"><h2 id="h-tr">多語翻譯</h2><span class="sp"></span><span class="meta" id="trMeta"></span></div>
+      <div class="body" id="trBody"><p class="empty" id="trEmpty" style="margin:0">在左側勾選翻譯語言後，逐字稿會分批翻譯並顯示在這裡。</p><div id="tr"></div></div>
+    </section>
+  </div>
+</main>
+
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const LANGS=[["en","English"],["ja","日本語"],["ko","한국어"],["es","Español"],["fr","Français"],["de","Deutsch"],["vi","Tiếng Việt"],["th","ไทย"],["id","Bahasa Indonesia"]];
+const KEY="ly-workbench-pages-v1";
+const CHUNK_SEC=30;
+
+let segs=[];            // {t, text, closed, tr:{}}
+let summary="", sumIdx=0, sumOff=0, sumBusy=false, sumNext=0, lastSumAt=0;
+let trIdx=0, trBusy=false, trNext=0;
+let running=false, startedAt=0, lastFinalAt=0, lastHeardAt=0;
+let stream=null, track=null, rec=null, recRestart=null, engineInUse="";
+let actx=null, proc=null, pcm=[], pcmLen=0, chunkTimer=null, asrChain=Promise.resolve(), collecting=false;
+let sections=[{title:"",start:0,summary:"",t:0}], viewSec=null, recorder=null, recChunks=[], recUrl="";
+let knownSpeakers=[], minutes="", view="sum", minBusy=false, fileBusy=false, fileCancel=false;
+let SRClass=null, recFails=0, lastRecErr="", lastRecAt=0, lastLoudAt=0, liveFinals=[], liveInterim="", silentWarned=false;
+let clearArmed=0, usage={day:"",n:0};
+
+/* ---------- 儲存 ---------- */
+function persist(){try{localStorage.setItem(KEY,JSON.stringify({segs,sections,summary,minutes,knownSpeakers,sumIdx,sumOff,trIdx,usage,url:$("url").value,glossary:$("glossary").value,lang:$("lang").value,every:$("every").value,engine:$("engine").value,key:$("key").value,model:$("model").value,langs:pickedLangs()}))}catch(e){}}
+function restore(){
+  try{
+    const d=JSON.parse(localStorage.getItem(KEY)||"null"); if(!d) return;
+    segs=Array.isArray(d.segs)?d.segs:[]; segs.forEach(s=>{s.closed=true; s.tr=s.tr||{}});
+    if(Array.isArray(d.sections)&&d.sections.length)sections=d.sections;
+    summary=d.summary||"";minutes=d.minutes||"";if(Array.isArray(d.knownSpeakers))knownSpeakers=d.knownSpeakers; sumIdx=d.sumIdx||0; sumOff=d.sumOff||0; trIdx=Math.min(d.trIdx||0,segs.length);
+    if(d.usage) usage=d.usage;
+    ["url","glossary","lang","every","engine","key","model"].forEach(k=>{if(typeof d[k]==="string"&&d[k]!=="")$(k).value=d[k]});
+    (d.langs||[]).forEach(c=>{const el=$("lg-"+c); if(el) el.checked=true});
+  }catch(e){}
+}
+
+/* ---------- 小工具 ---------- */
+const pad=n=>String(n).padStart(2,"0");
+function clock(ms){const d=new Date(ms);return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds())}
+function tstr(x){return x.mt?hms(x.t/1000):clock(x.t)}
+function hms(s){s=Math.max(0,Math.floor(s));return pad(Math.floor(s/3600))+":"+pad(Math.floor(s%3600/60))+":"+pad(s%60)}
+function today(){const d=new Date();return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+function totalChars(){return segs.reduce((n,s)=>n+s.text.length,0)}
+function pickedLangs(){return LANGS.map(l=>l[0]).filter(c=>{const el=$("lg-"+c);return el&&el.checked})}
+function langName(c){const f=LANGS.find(l=>l[0]===c);return f?f[1]:c}
+function banner(text){const b=$("banner");if(text){b.textContent=text;b.classList.add("show")}else b.classList.remove("show")}
+function note(el,text){const old=el.textContent;el.textContent=text;setTimeout(()=>{el.textContent=old},1500)}
+async function copy(text,btn){try{await navigator.clipboard.writeText(text);note(btn,"已複製")}catch(e){note(btn,"複製失敗")}}
+function apiKey(){return $("key").value.trim()}
+function bumpUsage(){const d=today();if(usage.day!==d)usage={day:d,n:0};usage.n++;showUsage()}
+function showUsage(){const n=usage.day===today()?usage.n:0;$("quota").textContent="今日已用 "+n+" 次請求（免費額度約每日 500 次）。";$("quota").className="hint"+(n>420?" bad":"")}
+
+/* ---------- Gemini ---------- */
+async function gemini(parts,opts){
+  const key=apiKey();if(!key){const e=new Error("尚未填入 Gemini 金鑰");e.code="no_key";throw e}
+  const model=($("model").value.trim()||"gemini-3.5-flash-lite").replace(/^models\//,"");
+  const body={contents:[{role:"user",parts}],generationConfig:Object.assign({temperature:0.2},opts&&opts.json?{responseMimeType:"application/json"}:{})};
+  bumpUsage();
+  let r;
+  try{r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(model)+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify(body)})}
+  catch(e){const err=new Error("連不上 Gemini，請檢查網路");err.code="network";throw err}
+  let j=null;try{j=await r.json()}catch(e){}
+  if(!r.ok){
+    const msg=j&&j.error&&j.error.message||("HTTP "+r.status);
+    const err=new Error(r.status===429?"Gemini 免費額度暫時用完（每分鐘或每日上限）":r.status===404?"找不到模型「"+model+"」，請到 AI Studio 確認模型名稱後修改左側欄位":r.status===400||r.status===403?"金鑰無效或沒有權限："+msg:msg);
+    err.code=r.status===429?"rate":r.status===404?"model":"http";throw err;
+  }
+  const c=j&&j.candidates&&j.candidates[0];
+  return ((c&&c.content&&c.content.parts)||[]).map(p=>p.text||"").join("").trim();
+}
+
+/* ---------- 逐字稿 ---------- */
+function nearBottom(el){return el.scrollHeight-el.scrollTop-el.clientHeight<140}
+function renderSeg(i){
+  const s=segs[i];let row=$("seg-"+i);
+  if(!row){row=document.createElement("div");row.className="seg";row.id="seg-"+i;
+    const t=document.createElement("time");t.textContent=tstr(s);const p=document.createElement("p");row.append(t,p);$("tx").append(row)}
+  const p=row.lastChild;p.textContent="";
+  if(s.sp){const b=document.createElement("b");b.className="sp";b.textContent=s.sp;p.append(b)}
+  p.append(document.createTextNode(s.text));
+}
+function renderAll(){
+  $("tx").textContent="";$("tr").textContent="";
+  if(!segs.length&&secShown(sections.length-1)&&sections[sections.length-1].start===0&&sections.length===1)addDivider(0);
+  segs.forEach((_,i)=>{sections.forEach((sc,n)=>{if(sc.start===i&&secShown(n))addDivider(n)});renderSeg(i);renderTr(i)});
+  sections.forEach((sc,n)=>{if(sc.start>=segs.length&&segs.length&&secShown(n)&&!$("secdiv-"+n))addDivider(n)});
+  renderSecSel();renderSummaryView();$("minutes").textContent=minutes;refreshMeta();
+}
+function refreshMeta(){
+  $("txEmpty").hidden=segs.length>0;
+  $("counts").textContent="逐字稿 "+totalChars().toLocaleString()+" 字";
+}
+function addText(text,now,forceNew){
+  text=String(text||"").trim();if(!text)return;
+  const body=$("txBody"),stick=nearBottom(body);
+  const last=segs[segs.length-1];
+  const fresh=forceNew||!last||last.closed||last.text.length>110||(now-lastFinalAt)>7000;
+  if(fresh){if(last)last.closed=true;segs.push({t:now,text,closed:false,tr:{}})}
+  else last.text+=(/[，。？！、；：,.?!]$/.test(last.text)?"":"，")+text;
+  lastFinalAt=now;lastHeardAt=now;renderSeg(segs.length-1);refreshMeta();persist();
+  if(stick)body.scrollTop=body.scrollHeight;
+}
+function closeLast(){const l=segs[segs.length-1];if(l)l.closed=true}
+function secName(n){return "第 "+(n+1)+" 段"+(sections[n].title?"："+sections[n].title:"")}
+function secShown(n){return n>0||!!sections[n].title}
+function addDivider(n){
+  const d=document.createElement("div");d.className="secdiv";d.id="secdiv-"+n;
+  const a=document.createElement("span");a.textContent=secName(n);d.append(a);
+  if(sections[n].t){const b=document.createElement("small");b.textContent=clock(sections[n].t)+" 開始";d.append(b)}
+  $("tx").append(d);
+}
+function fullTranscript(){
+  const out=[];
+  segs.forEach((x,i)=>{sections.forEach((sc,n)=>{if(sc.start===i&&secShown(n))out.push("","＝＝ "+secName(n)+" ＝＝")});out.push("["+tstr(x)+"] "+label(x))});
+  return out.join("\n").trim();
+}
+function renderSecSel(){
+  const sel=$("secSel");sel.textContent="";sel.hidden=sections.length<2;
+  sections.forEach((sc,n)=>{const o=document.createElement("option");o.value=n;o.textContent=secName(n)+(n===sections.length-1?"（目前）":"");sel.append(o)});
+  sel.value=viewSec==null?sections.length-1:viewSec;
+}
+function renderSummaryView(){
+  const cur=viewSec==null||viewSec===sections.length-1;
+  $("summary").textContent=cur?summary:(sections[viewSec].summary||"（這一段沒有摘要）");
+}
+function sumPrompt(prev,newText,title){
+  const gl=$("glossary").value.trim();
+  return [
+"你是立法院質詢與各類會議的即時記錄助理，服務對象是公共事務顧問。若內容不是質詢而是一般會議或訪談，「質詢重點」請改寫各方的主張與提問，「官員答復與承諾」請改寫回應與承諾，標題不變。",
+"以下逐字稿由語音辨識產生，會有同音錯字、漏字與斷句錯誤；【】內的發言者是自動判斷的，可能有誤或缺漏。請依上下文與專有名詞表推斷正確用詞與說話者；無法確定的人名或數字後面加上（？）。不得加入逐字稿沒有的內容。",
+"輸出規則：繁體中文、台灣用語、全形標點、純文字，不要使用 Markdown 符號。整份控制在 900 字內。固定使用以下段落標題，沒有內容的段落寫「尚無」：",
+"【目前議題】一到兩句",
+"【質詢重點】逐點列出，標明是哪位委員的主張或要求",
+"【官員答復與承諾】逐點列出，標明答復者，承諾事項註明期限",
+"【爭點與關鍵數字】",
+"【下一步建議】給顧問的具體追蹤動作，最多四點",
+"【時間軸】保留先前摘要的每一行，並依新增逐字稿補上新的一行（時間＋一句話）",
+"",
+"本段名稱："+(title||"（未命名）"),
+"專有名詞表："+(gl||"（未提供）"),
+"",
+"先前摘要：",prev||"（尚無，這是第一次摘要）",
+"",
+"新增逐字稿：",newText,
+"",
+"請輸出整合後的完整摘要。"].join("\n");
+}
+function doSplit(title){
+  title=String(title||"").trim();const cur=sections.length-1;closeLast();
+  if(segs.length===sections[cur].start){            // 目前這一段還沒有內容：只改名稱
+    if(title){sections[cur].title=title;if(!sections[cur].t)sections[cur].t=Date.now();renderAll()}
+    persist();return;
+  }
+  const pend=pendingText(60000),prev=summary;
+  sections[cur].summary=summary;
+  summary="";sumIdx=segs.length;sumOff=0;lastSumAt=0;sumNext=0;
+  sections.push({title,start:segs.length,summary:"",t:Date.now()});
+  addDivider(sections.length-1);viewSec=null;renderSecSel();renderSummaryView();
+  $("sumMeta").textContent="已開始"+secName(sections.length-1)+"。上一段的摘要可從上方選單查看。";
+  const b=$("txBody");b.scrollTop=b.scrollHeight;persist();
+  if(apiKey()&&pend.text.trim().length>=30){       // 把上一段尚未整理的內容補進它的摘要
+    gemini([{text:sumPrompt(prev,pend.text,sections[cur].title)}]).then(t=>{if(t){sections[cur].summary=t;sections[cur].done=true;renderSummaryView();persist()}}).catch(()=>{});
+  }
+}
+function newSection(title){
+  if(chunkTimer)flushChunk(true);                    // 先把分段前的聲音送出，等它回稿後才畫分隔線
+  asrChain=asrChain.then(()=>doSplit(title)).catch(()=>{});
+  $("secTitle").value="";
+}
+function label(s){return (s.sp?"【"+s.sp+"】":"")+s.text}
+function addTurns(raw,t0,durMs,media){   // Gemini 回稿：每行「【發言者】內容」，同一人連續發言併成一段
+  const turns=[];
+  String(raw||"").split(/\n+/).forEach(line=>{
+    line=line.trim();if(!line)return;
+    const m=line.match(/^[【\[]\s*([^】\]]{1,20})\s*[】\]]\s*[:：]?\s*(.*)$/);
+    const sp=m?m[1].trim():"",text=(m?m[2]:line).trim();if(!text)return;
+    const prev=turns[turns.length-1];
+    if(prev&&(!m||prev.sp===sp))prev.text+=text;else turns.push({sp,text});
+  });
+  if(!turns.length)return false;
+  const body=$("txBody"),stick=nearBottom(body),total=turns.reduce((n,x)=>n+x.text.length,0)||1;let done=0;
+  turns.forEach(x=>{
+    const t=t0+Math.round(done/total*durMs);done+=x.text.length;
+    const last=segs[segs.length-1];
+    if(last&&x.sp&&last.sp===x.sp&&last.text.length<260&&t-last.t<120000){last.text+=x.text;last.closed=false;renderSeg(segs.length-1)}
+    else{if(last)last.closed=true;segs.push({t,sp:x.sp,text:x.text,closed:false,tr:{},mt:!!media});renderSeg(segs.length-1)}
+    if(x.sp&&knownSpeakers.indexOf(x.sp)<0){knownSpeakers.push(x.sp);if(knownSpeakers.length>30)knownSpeakers.shift()}
+  });
+  lastFinalAt=Date.now();refreshMeta();persist();
+  if(stick)body.scrollTop=body.scrollHeight;
+  return true;
+}
+function tailContext(){const out=[];let n=0;for(let i=segs.length-1;i>=0&&n<220;i--){out.unshift(label(segs[i]).slice(-220));n+=segs[i].text.length}return out.join("\n")}
+
+/* ---------- 直播播放器 ---------- */
+function ytId(u){
+  try{const x=new URL(u);
+    if(/(^|\.)youtu\.be$/.test(x.hostname))return x.pathname.slice(1).split("/")[0];
+    if(/(^|\.)youtube\.com$/.test(x.hostname)){
+      if(x.searchParams.get("v"))return x.searchParams.get("v");
+      const m=x.pathname.match(/^\/(live|embed|shorts)\/([\w-]{6,})/);if(m)return m[2];
+    }
+  }catch(e){}
+  return "";
+}
+function loadPlayer(){
+  const v=$("url").value.trim(),id=ytId(v),box=$("player");box.textContent="";
+  if(id){
+    const f=document.createElement("iframe");
+    f.src="https://www.youtube.com/embed/"+encodeURIComponent(id)+"?autoplay=1&playsinline=1";
+    f.allow="autoplay; encrypted-media; picture-in-picture; fullscreen";f.title="直播播放器";
+    box.append(f);
+    $("playerHint").textContent="播放器沒畫面或顯示無法播放時，請把直播開在另一個分頁，並把下方「聲音來源」改成「另一個分頁」。";
+  }else{
+    const s=document.createElement("span");
+    if(v)$("srcMode").value="other";
+    s.textContent=v?"這個網址無法內嵌播放。請把直播開在另一個分頁，開始轉錄時選那個分頁。":"貼上網址並按「載入」，直播會在這裡播放。";
+    box.append(s);
+  }
+  persist();
+}
+
+/* ---------- 擷取分頁聲音 ---------- */
+const ENG_LABEL={chrome:"Chrome 即時",gemini:"Gemini 分段",hybrid:"即時＋Gemini 校正"};
+function setStatus(){
+  const p=$("status"),t=$("statusText");p.className="pill";
+  if(running){p.classList.add("on");t.textContent="轉錄中 "+hms((Date.now()-startedAt)/1000)+"｜"+ENG_LABEL[engineInUse]}
+  else t.textContent="待命";
+  $("startBtn").disabled=running||fileBusy;$("stopBtn").disabled=!running;
+  $("engine").disabled=running;$("lang").disabled=running;
+}
+async function start(){
+  if(running)return;
+  banner("");
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){banner("這個瀏覽器不支援擷取分頁聲音，請改用電腦版 Chrome。");return}
+  const mode=$("srcMode").value,hasEmbed=mode==="self"&&!!$("player").querySelector("iframe");
+  if(mode==="mic"){
+    try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true}})}
+    catch(e){banner("沒有取得麥克風。請在 Chrome 網址列左側的權限圖示允許麥克風，並到 macOS「系統設定 → 隱私權與安全性 → 麥克風」確認 Chrome 已開啟，再按一次「開始轉錄」。");return}
+  }else{
+    try{
+      stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true,preferCurrentTab:hasEmbed,selfBrowserSurface:"include",systemAudio:"include"});
+    }catch(e){banner("沒有開始：你取消了分享，或 Chrome 沒有允許。請再按一次「開始轉錄」。");return}
+  }
+  track=stream.getAudioTracks()[0]||null;
+  if(!track){
+    stream.getTracks().forEach(t=>t.stop());stream=null;
+    banner("沒有擷取到聲音。請再按一次「開始轉錄」，在分享視窗選「Chrome 分頁」（不要選視窗或整個螢幕），並勾選「同時分享分頁音訊」。");return;
+  }
+  stream.getVideoTracks().forEach(t=>{t.enabled=false});
+  track.addEventListener("ended",()=>{if(running){stop();banner("聲音來源已中斷，轉錄停止。要接續請再按「開始轉錄」。")}});
+  SRClass=window.SpeechRecognition||window.webkitSpeechRecognition||null;
+  let eng=$("engine").value;
+  if(eng!=="chrome"&&!apiKey()){
+    if(SRClass){eng="chrome";banner("尚未填入 Gemini 金鑰，這次先只用 Chrome 即時辨識。")}
+    else{stream.getTracks().forEach(t=>t.stop());stream=null;track=null;banner("需要先填入 Gemini 金鑰才能轉錄。");return}
+  }
+  if(eng!=="gemini"&&!SRClass){
+    if(apiKey()){eng="gemini";banner("這個瀏覽器沒有內建語音辨識，改用 Gemini 分段辨識。")}
+    else{stream.getTracks().forEach(t=>t.stop());stream=null;track=null;banner("這個瀏覽器沒有內建語音辨識，請填入 Gemini 金鑰。");return}
+  }
+  running=true;startedAt=Date.now();lastLoudAt=Date.now();lastRecAt=Date.now();recFails=0;liveFinals=[];liveInterim="";silentWarned=false;
+  engineInUse=eng;
+  if($("autoSec").checked||$("secTitle").value.trim())newSection($("secTitle").value);
+  startRecorder();
+  startTap();
+  if(eng!=="gemini")startChrome();
+  if(eng!=="chrome")startChunks();
+  setStatus();
+}
+function stop(){
+  running=false;
+  if(recRestart){clearTimeout(recRestart);recRestart=null}
+  killRec();
+  if(chunkTimer){clearInterval(chunkTimer);chunkTimer=null;flushChunk(true)}
+  else if(liveFinals.length){addText(liveFinals.map(x=>x.text).join("，"),liveFinals[0].t,true);liveFinals=[]}
+  collecting=false;
+  if(proc){try{proc.disconnect()}catch(e){}proc=null}
+  if(actx){try{actx.close()}catch(e){}actx=null}
+  if(recorder){try{recorder.stop()}catch(e){}recorder=null}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  track=null;liveInterim="";renderPreview();closeLast();setStatus();persist();
+}
+function startRecorder(){
+  recorder=null;recChunks=[];
+  if(!$("keepRec").checked||!window.MediaRecorder)return;
+  try{
+    const type=["audio/webm;codecs=opus","audio/webm","audio/mp4"].find(t=>MediaRecorder.isTypeSupported(t))||"";
+    const r=new MediaRecorder(new MediaStream([track]),type?{mimeType:type}:undefined);recorder=r;
+    r.ondataavailable=e=>{if(e.data&&e.data.size)recChunks.push(e.data)};
+    r.onstop=()=>{
+      if(!recChunks.length)return;
+      const ext=(r.mimeType||"").indexOf("mp4")>=0?"m4a":"webm",d=new Date();
+      if(recUrl)URL.revokeObjectURL(recUrl);
+      recUrl=URL.createObjectURL(new Blob(recChunks,{type:r.mimeType||"audio/webm"}));recChunks=[];
+      const a=$("recLink");a.href=recUrl;a.download="錄音-"+today()+"-"+pad(d.getHours())+pad(d.getMinutes())+"."+ext;
+      a.textContent="下載這次的錄音（"+clock(Date.now())+" 結束）";$("recOut").hidden=false;
+    };
+    r.start(10000);
+  }catch(e){recorder=null}
+}
+function startTap(){
+  const AC=window.AudioContext||window.webkitAudioContext;
+  actx=new AC();try{actx.resume()}catch(e){}
+  const src=actx.createMediaStreamSource(new MediaStream([track]));
+  proc=actx.createScriptProcessor(4096,1,1);
+  proc.onaudioprocess=e=>{
+    const d=e.inputBuffer.getChannelData(0);let s=0;
+    for(let i=0;i<d.length;i+=32)s+=d[i]*d[i];
+    if(Math.sqrt(s/(d.length/32))>0.008)lastLoudAt=Date.now();
+    if(collecting){pcm.push(new Float32Array(d));pcmLen+=d.length}
+  };
+  const mute=actx.createGain();mute.gain.value=0;
+  src.connect(proc);proc.connect(mute);mute.connect(actx.destination);
+}
+function renderPreview(){
+  const b=$("txBody"),stick=nearBottom(b);
+  const parts=liveFinals.map(x=>x.text);if(liveInterim)parts.push(liveInterim);
+  $("partial").textContent=parts.length?(engineInUse==="hybrid"&&running?"（即時預覽，稍後由 Gemini 校正）":"")+parts.join("，"):"";
+  if(stick)b.scrollTop=b.scrollHeight;
+}
+
+/* ---------- 引擎 A：Chrome 即時辨識 ---------- */
+function killRec(){if(rec){const r=rec;rec=null;try{r.onend=null;r.onerror=null;r.onresult=null;r.abort()}catch(e){}}}
+function restartChrome(){if(recRestart){clearTimeout(recRestart);recRestart=null}killRec();startChrome()}
+function startChrome(){
+  recRestart=null;
+  if(!running||!track||engineInUse==="gemini"||!SRClass)return;
+  const r=new SRClass();rec=r;lastRecAt=Date.now();
+  r.lang=$("lang").value;r.continuous=true;r.interimResults=true;
+  r.onresult=e=>{
+    recFails=0;lastRecAt=Date.now();let interim="";
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const res=e.results[i],txt=(res[0]&&res[0].transcript||"").trim();if(!txt)continue;
+      if(res.isFinal){if(engineInUse==="hybrid")liveFinals.push({t:Date.now(),text:txt});else addText(txt,Date.now())}
+      else interim+=txt;
+    }
+    liveInterim=interim;renderPreview();
+  };
+  r.onerror=e=>{
+    const code=e.error;if(code==="no-speech"||code==="aborted")return;
+    lastRecErr=code;recFails++;
+    if(code==="not-allowed"||code==="service-not-allowed"||code==="language-not-supported")recFails=Math.max(recFails,6);
+  };
+  r.onend=()=>{
+    if(rec!==r)return;rec=null;liveInterim="";
+    if(!running||engineInUse==="gemini")return;
+    if(recFails>=6){
+      if(engineInUse==="hybrid"){recRestart=setTimeout(startChrome,15000);return}       // Gemini 仍在出稿，即時預覽晚點再試
+      if(apiKey()){switchToGemini("Chrome 即時辨識連續失敗（"+lastRecErr+"），已自動改用 Gemini 分段辨識。");return}
+      banner("Chrome 即時辨識連續失敗（"+lastRecErr+"），每 5 秒自動重試。填入 Gemini 金鑰可改用較穩定的引擎。");
+      recRestart=setTimeout(startChrome,5000);return;
+    }
+    recRestart=setTimeout(startChrome,recFails?1200:120);   // Chrome 會在停頓後自行結束辨識，這裡自動接續
+  };
+  try{r.start(track)}
+  catch(e){
+    rec=null;
+    if(engineInUse==="hybrid"){engineInUse="gemini";banner("這個版本的 Chrome 不支援即時辨識分頁聲音，這次只用 Gemini 分段辨識。");setStatus()}
+    else if(apiKey())switchToGemini("這個版本的 Chrome 不支援即時辨識分頁聲音，已自動改用 Gemini 分段辨識。");
+    else{stop();banner("這個版本的 Chrome 不支援即時辨識分頁聲音。請更新 Chrome，或填入 Gemini 金鑰改用「Gemini 分段辨識」。")}
+  }
+}
+function switchToGemini(msg){
+  if(recRestart){clearTimeout(recRestart);recRestart=null}
+  killRec();liveInterim="";engineInUse="gemini";recFails=0;
+  banner(msg);startChunks();setStatus();
+}
+
+/* ---------- 引擎 B：Gemini 分段辨識／校正 ---------- */
+function startChunks(){
+  collecting=true;pcm=[];pcmLen=0;
+  chunkTimer=setInterval(flushChunk,CHUNK_SEC*1000);
+  if(engineInUse==="gemini")$("partial").textContent="每 "+CHUNK_SEC+" 秒送出一段辨識，第一段稍候…";
+}
+function commitLive(cutT){   // Gemini 沒有回稿時，保留即時辨識的文字
+  const old=liveFinals.filter(x=>x.t<=cutT);
+  if(old.length)addText(old.map(x=>x.text).join("，"),old[0].t,true);
+  liveFinals=liveFinals.filter(x=>x.t>cutT);renderPreview();
+}
+function flushChunk(final){
+  const cutT=Date.now();
+  if(!actx||!pcmLen){if(final)commitLive(cutT);return}
+  const rate=actx.sampleRate,all=new Float32Array(pcmLen);let o=0;pcm.forEach(a=>{all.set(a,o);o+=a.length});pcm=[];pcmLen=0;
+  const t0=cutT-Math.round(all.length/rate*1000);
+  let sq=0;for(let i=0;i<all.length;i+=16)sq+=all[i]*all[i];
+  if(all.length<rate*2||Math.sqrt(sq/(all.length/16))<0.004){commitLive(cutT);return}   // 太短或幾乎無聲就不送，節省額度
+  const b64=wavBase64(all,rate);
+  asrChain=asrChain.then(async()=>{
+    try{
+      const text=await geminiTranscribe(b64);
+      if(text&&!/^[\s（(【]*(無|沒有)(人)?(說話|語音|聲音)/.test(text)&&addTurns(text,t0,cutT-t0)){
+        liveFinals=liveFinals.filter(x=>x.t>cutT);renderPreview();
+      }else commitLive(cutT);
+      if(engineInUse==="gemini"&&!liveFinals.length&&!liveInterim)$("partial").textContent="";
+    }catch(err){
+      commitLive(cutT);
+      banner("Gemini 這一段沒有回稿："+err.message+(liveFinals.length||engineInUse==="hybrid"?"。已保留即時辨識的文字。":"。下一段會繼續嘗試。"));
+    }
+  });
+}
+async function geminiTranscribe(b64){
+  const gl=$("glossary").value.trim(),ctx=tailContext();
+  return gemini([
+        {text:[
+"請把這段錄音（立法院質詢、會議、座談或訪談）逐字轉寫成繁體中文（台灣用語、全形標點）。",
+"每換一位發言者就另起一行，每行格式固定為：【發言者】內容",
+"發言者請依聲音、彼此的稱呼與上下文判斷，優先寫姓名加職稱（例：王委員、石部長、主席、主持人）；無法判斷是誰時寫「發言者甲」「發言者乙」。同一個人務必沿用先前用過的稱呼。這一段開頭若接續上一段最後那位發言者，就用同一個稱呼。",
+"只輸出轉寫結果，不要說明、不要時間碼、不要加入錄音裡沒有的內容；聽不清楚的地方略過；整段沒有人說話就輸出空白。",
+gl?"專有名詞與可能的發言者："+gl:"",
+knownSpeakers.length?"先前已出現的發言者稱呼："+knownSpeakers.join("、"):"",
+ctx?"上一段結尾（僅供判斷接續的發言者，不要重複輸出）：\n"+ctx:""].filter(Boolean).join("\n")},
+        {inlineData:{mimeType:"audio/wav",data:b64}}]);
+}
+function wavBase64(f32,rate){
+  const ratio=rate/16000,n=Math.floor(f32.length/ratio),buf=new ArrayBuffer(44+n*2),v=new DataView(buf);
+  const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,"RIFF");v.setUint32(4,36+n*2,true);w(8,"WAVEfmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,16000,true);v.setUint32(28,32000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){
+    const a=Math.floor(i*ratio),b=Math.min(f32.length,Math.floor((i+1)*ratio));let s=0;for(let k=a;k<b;k++)s+=f32[k];
+    s=Math.max(-1,Math.min(1,s/Math.max(1,b-a)));v.setInt16(44+i*2,s<0?s*0x8000:s*0x7fff,true);
+  }
+  const u8=new Uint8Array(buf);let bin="";for(let i=0;i<u8.length;i+=0x8000)bin+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));
+  return btoa(bin);
+}
+
+/* ---------- 摘要 ---------- */
+function pendingText(limit){
+  let out=[],n=0,endIdx=sumIdx,endOff=sumOff;
+  for(let i=sumIdx;i<segs.length;i++){
+    const t=i===sumIdx?segs[i].text.slice(sumOff):segs[i].text;
+    if(t.trim())out.push("["+tstr(segs[i])+"] "+(segs[i].sp?"【"+segs[i].sp+"】":"")+t);
+    n+=t.length;endIdx=i;endOff=segs[i].text.length;
+    if(n>=limit)break;
+  }
+  return {text:out.join("\n"),endIdx,endOff};
+}
+function pendingChars(){let n=0;for(let i=sumIdx;i<segs.length;i++)n+=segs[i].text.length-(i===sumIdx?sumOff:0);return Math.max(0,n)}
+async function runSummary(manual){
+  if(sumBusy)return;
+  if(!apiKey()){if(manual)$("sumMeta").textContent="請先在左側填入 Gemini 金鑰。";return}
+  const pend=pendingText(12000);
+  if(!pend.text.trim()){if(manual)$("sumMeta").textContent="沒有新的逐字稿可以摘要。";return}
+  sumBusy=true;$("sumBtn").disabled=true;$("sumMeta").textContent="摘要更新中…";
+  const secAt=sections.length-1,prompt=sumPrompt(summary,pend.text,sections[secAt].title);
+  try{
+    const text=await gemini([{text:prompt}]);
+    if(text&&secAt!==sections.length-1){if(!sections[secAt].done)sections[secAt].summary=text;renderSummaryView()}
+    else if(text){
+      summary=text;renderSummaryView();sumIdx=pend.endIdx;sumOff=pend.endOff;lastSumAt=Date.now();
+      $("sumMeta").textContent="最後更新 "+clock(lastSumAt)+(pendingChars()>0?"｜還有 "+pendingChars()+" 字待整理":"");
+    }else $("sumMeta").textContent="這次沒有取得摘要，稍後會再試。";
+    sumNext=Date.now()+15000;
+  }catch(err){
+    sumNext=Date.now()+(err.code==="rate"?120000:err.code==="model"||err.code==="http"?600000:45000);
+    $("sumMeta").textContent="摘要失敗："+err.message+(err.code==="rate"?"，兩分鐘後自動重試。":"");
+  }
+  sumBusy=false;$("sumBtn").disabled=minBusy;persist();
+}
+
+/* ---------- 翻譯 ---------- */
+function renderTr(i){
+  const s=segs[i];const codes=Object.keys(s.tr||{});let row=$("tr-"+i);
+  if(!codes.length){if(row)row.remove();return}
+  if(!row){row=document.createElement("div");row.className="tr";row.id="tr-"+i;$("tr").append(row)}
+  row.textContent="";const t=document.createElement("time");t.textContent=tstr(s);const box=document.createElement("div");
+  codes.forEach(c=>{const p=document.createElement("p");const tag=document.createElement("span");tag.textContent=langName(c);p.append(tag,document.createTextNode(s.tr[c]));box.append(p)});
+  row.append(t,box);$("trEmpty").hidden=true;
+}
+async function runTranslate(){
+  const langs=pickedLangs();if(trBusy||!langs.length||!apiKey())return;
+  const batch=[];
+  for(let i=trIdx;i<segs.length&&batch.length<8;i++){if(!segs[i].closed)break;batch.push(i)}
+  if(!batch.length)return;
+  trBusy=true;$("trMeta").textContent="翻譯中…";
+  const prompt=[
+"把下列立法院質詢逐字稿段落翻譯成這些語言："+langs.map(c=>c+"（"+langName(c)+"）").join("、")+"。",
+"原文由語音辨識產生，可能有同音錯字，請依上下文修正後再翻譯，不要增刪內容。",
+"只輸出 JSON 陣列。格式：[{\"i\":段落編號,"+langs.map(c=>"\""+c+"\":\"譯文\"").join(",")+"}]",
+"",
+batch.map(n=>"#"+n+" "+segs[n].text).join("\n")].join("\n");
+  try{
+    const raw=await gemini([{text:prompt}],{json:true});
+    const a=raw.indexOf("["),b=raw.lastIndexOf("]");
+    let arr=[];try{arr=JSON.parse(raw.slice(a,b+1))}catch(e){}
+    const body=$("trBody"),stick=nearBottom(body);
+    arr.forEach(o=>{const n=Number(o.i);if(!segs[n])return;langs.forEach(c=>{if(typeof o[c]==="string")segs[n].tr[c]=o[c]});renderTr(n)});
+    trIdx=batch[batch.length-1]+1;trNext=Date.now()+60000;$("trMeta").textContent="";   // 每分鐘最多一批，保留免費額度
+    if(stick)body.scrollTop=body.scrollHeight;persist();
+  }catch(err){
+    trNext=Date.now()+(err.code==="rate"?180000:60000);
+    $("trMeta").textContent="翻譯失敗："+err.message;
+  }
+  trBusy=false;
+}
+
+/* ---------- 上傳檔案轉錄 ---------- */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function fileNote(t,cls){const n=$("fileNote");n.textContent=t;n.className="hint"+(cls?" "+cls:"")}
+async function runFile(){
+  if(fileBusy)return;
+  const f=$("file").files[0];
+  if(!f){fileNote("請先選擇一個錄音或影片檔。","bad");return}
+  if(running){fileNote("直播轉錄進行中，請先停止再處理檔案。","bad");return}
+  if(!apiKey()){fileNote("處理檔案需要 Gemini 金鑰，請先在下方填入並測試。","bad");return}
+  if(segs.length){fileNote("目前已有逐字稿。請先下載保存，按「清空」後再處理新檔案。","bad");return}
+  fileBusy=true;fileCancel=false;banner("");$("fileBtn").disabled=true;$("fileStop").hidden=false;$("startBtn").disabled=true;
+  try{
+    const box=$("player");box.textContent="";
+    const el=document.createElement(f.type.indexOf("video")===0?"video":"audio");el.controls=true;el.src=URL.createObjectURL(f);
+    el.style.cssText="width:100%;max-height:100%";box.append(el);
+    fileNote("讀取與解碼中，檔案越大越久，請稍候…");
+    const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+    let ab;
+    try{ab=await new OAC(1,16000,16000).decodeAudioData(await f.arrayBuffer())}
+    catch(e){throw new Error("無法讀取這個檔案（可能太大或格式不支援）。請先轉成 m4a 或 mp3 再試。")}
+    const sr=ab.sampleRate,ch=ab.numberOfChannels,total=ab.length,SEG=60*sr,n=Math.ceil(total/SEG);
+    let fails=0;
+    for(let k=0;k<n;k++){
+      if(fileCancel)break;
+      const a=k*SEG,b=Math.min(total,a+SEG),mono=new Float32Array(b-a);
+      for(let c=0;c<ch;c++){const d=ab.getChannelData(c);for(let i=a;i<b;i++)mono[i-a]+=d[i]/ch}
+      fileNote("轉錄中：第 "+(k+1)+"／"+n+" 段（"+hms(a/sr)+"）");
+      let sq=0;for(let i=0;i<mono.length;i+=16)sq+=mono[i]*mono[i];
+      if(mono.length<sr||Math.sqrt(sq/(mono.length/16))<0.003)continue;
+      const b64=wavBase64(mono,sr),began=Date.now();let text=null;
+      for(let tryN=0;tryN<4&&!fileCancel;tryN++){
+        try{text=await geminiTranscribe(b64);break}
+        catch(err){
+          if(err.code==="rate"&&tryN<3){fileNote("第 "+(k+1)+"／"+n+" 段：達到每分鐘上限，等 35 秒後重試…");await sleep(35000);continue}
+          if(err.code==="network"&&tryN<3){await sleep(5000);continue}
+          if(err.code==="model"||err.code==="http"||err.code==="no_key")throw err;
+          fails++;break;
+        }
+      }
+      if(text&&!/^[\s（(【]*(無|沒有)(人)?(說話|語音|聲音)/.test(text))addTurns(text,a/sr*1000,(b-a)/sr*1000,true);
+      if(fails>=5)throw new Error("連續多段沒有回稿，可能已達今日額度。已完成的部分保留在逐字稿中。");
+      const wait=6500-(Date.now()-began);if(wait>0&&k<n-1)await sleep(wait);   // 控制在每分鐘 10 次以內
+    }
+    closeLast();persist();
+    if(fileCancel)fileNote("已取消。完成的部分保留在逐字稿中。");
+    else{
+      fileNote("逐字稿完成，正在整理摘要…","ok");
+      for(let g=0;g<12&&pendingChars()>0;g++){const before=pendingChars();await runSummary(true);if(pendingChars()>=before)break;await sleep(4000)}
+      fileNote("完成。可切到「會議記錄」分頁按「產生會議記錄」。","ok");
+    }
+  }catch(err){fileNote(err.message||"處理失敗","bad")}
+  fileBusy=false;$("fileBtn").disabled=false;$("fileStop").hidden=true;setStatus();
+}
+
+/* ---------- 會議記錄 ---------- */
+function setView(v){
+  view=v;const m=v==="min";
+  $("tabSum").classList.toggle("on",!m);$("tabMin").classList.toggle("on",m);
+  $("sumMeta").hidden=m;$("summary").hidden=m;$("minMeta").hidden=!m;$("minutes").hidden=!m;
+  $("sumBtn").textContent=m?(minutes?"重新產生":"產生會議記錄"):"立即更新";
+}
+async function runMinutes(){
+  if(minBusy)return;
+  if(!apiKey()){$("minMeta").textContent="請先在左側填入 Gemini 金鑰。";return}
+  if(!segs.length){$("minMeta").textContent="還沒有逐字稿。";return}
+  let tx=fullTranscript(),cut=false;
+  if(tx.length>150000){tx=tx.slice(0,150000);cut=true}
+  minBusy=true;$("sumBtn").disabled=true;$("minMeta").textContent="會議記錄產生中，逐字稿較長時需要一到兩分鐘…";
+  const gl=$("glossary").value.trim();
+  const prompt=[
+"你是專業的會議記錄人員。請依下列逐字稿整理一份正式會議記錄。",
+"逐字稿由語音辨識產生，有同音錯字與漏字，【】內的發言者是自動判斷的，可能有誤。請依上下文與專有名詞表修正；無法確定的人名、數字、日期後面加上（？）。只能寫逐字稿裡有的內容，沒有提到的欄位寫「未提及」，不得自行補充。",
+"輸出規則：繁體中文、台灣用語、全形標點、純文字，不要使用 Markdown 符號。依序使用以下標題：",
+"【會議名稱】依內容判斷，一行",
+"【時間與來源】依逐字稿時間碼與下方來源資訊",
+"【出席與發言者】列出姓名或稱呼與身分",
+"【討論事項】逐項編號；每項包含「議題」「各方發言重點（標明發言者）」「結論」。逐字稿中以「＝＝ 第 N 段 ＝＝」分隔的是不同的質詢或議程段落，請依段落順序整理，並沿用段落名稱。",
+"【決議事項】逐點列出；沒有明確決議就寫「無明確決議」",
+"【待辦事項】逐點列出，格式：事項｜負責人｜期限；未提及負責人或期限就寫「未提及」",
+"【待確認事項】逐字稿中聽不清楚、前後矛盾或需要再查證的地方",
+"",
+"專有名詞表："+(gl||"（未提供）"),
+"來源："+($("url").value.trim()||($("file").files[0]&&$("file").files[0].name)||"（未提供）")+"；整理日期 "+today(),
+"",
+"逐字稿：",tx].join("\n");
+  try{
+    const text=await gemini([{text:prompt}]);
+    if(text){minutes=text;$("minutes").textContent=minutes;$("minMeta").textContent="產生於 "+clock(Date.now())+(cut?"｜逐字稿過長，只整理了前 15 萬字":"")+"｜內容由 AI 整理，發出前請核對人名、數字與決議。"}
+    else $("minMeta").textContent="這次沒有取得內容，請再按一次。";
+  }catch(err){$("minMeta").textContent="產生失敗："+err.message}
+  minBusy=false;$("sumBtn").disabled=false;setView(view);persist();
+}
+
+/* ---------- 匯出 ---------- */
+function exportMd(){
+  const d=new Date();
+  const lines=["# 逐字稿與會議記錄 "+today(),""];
+  if($("url").value.trim())lines.push("來源："+$("url").value.trim(),"");
+  if(!$("url").value.trim()&&$("file").files[0])lines.push("來源檔案："+$("file").files[0].name,"");
+  if(minutes)lines.push("## 會議記錄","",minutes,"");
+  sections.forEach((sc,n)=>{
+    const end=n<sections.length-1?sections[n+1].start:segs.length,sm=n===sections.length-1?summary:sc.summary;
+    if(end<=sc.start&&!sm)return;
+    if(sections.length>1||sc.title)lines.push("## "+secName(n),"");
+    lines.push("### 摘要與下一步建議","",sm||"（尚未產生）","","### 逐字稿","");
+    for(let i=sc.start;i<end;i++){const x=segs[i];lines.push("**"+tstr(x)+"** "+label(x));Object.keys(x.tr||{}).forEach(c=>lines.push("> "+langName(c)+"："+x.tr[c]));lines.push("")}
+  });
+  return {name:"逐字稿-"+today()+"-"+pad(d.getHours())+pad(d.getMinutes())+".md",text:lines.join("\n")};
+}
+
+/* ---------- 事件 ---------- */
+LANGS.forEach(([c,n])=>{const l=document.createElement("label");const i=document.createElement("input");i.type="checkbox";i.id="lg-"+c;i.addEventListener("change",()=>{trIdx=Math.max(trIdx,segs.length-3,0);persist()});l.append(i,document.createTextNode(n));$("langs").append(l)});
+restore();renderAll();setStatus();showUsage();
+if(ytId($("url").value.trim()))$("player").firstChild.textContent="按「載入」播放上次的直播網址。";
+$("loadBtn").addEventListener("click",loadPlayer);
+$("url").addEventListener("keydown",e=>{if(e.key==="Enter")loadPlayer()});
+["url","glossary","lang","every","engine","key","model"].forEach(id=>$(id).addEventListener("change",persist));
+$("startBtn").addEventListener("click",start);
+$("stopBtn").addEventListener("click",()=>{stop();banner("")});
+$("sumBtn").addEventListener("click",()=>{if(view==="min")runMinutes();else{viewSec=null;renderSecSel();renderSummaryView();runSummary(true)}});
+$("tabSum").addEventListener("click",()=>setView("sum"));
+$("tabMin").addEventListener("click",()=>setView("min"));
+$("fileBtn").addEventListener("click",runFile);
+$("secBtn").addEventListener("click",()=>newSection($("secTitle").value));
+$("secTitle").addEventListener("keydown",e=>{if(e.key==="Enter")newSection($("secTitle").value)});
+$("secSel").addEventListener("change",e=>{const n=Number(e.target.value);viewSec=n===sections.length-1?null:n;renderSummaryView()});
+$("srcMode").addEventListener("change",e=>{if(e.target.value==="mic")$("keepRec").checked=true});
+$("fileStop").addEventListener("click",()=>{fileCancel=true;fileNote("取消中，等目前這一段結束…")});
+setView("sum");
+$("copyTx").addEventListener("click",e=>copy(fullTranscript(),e.currentTarget));
+$("copySum").addEventListener("click",e=>copy(view==="min"?minutes:summary,e.currentTarget));
+$("saveBtn").addEventListener("click",()=>{
+  const f=exportMd(),a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([f.text],{type:"text/markdown;charset=utf-8"}));a.download=f.name;
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+});
+$("clearBtn").addEventListener("click",e=>{
+  const btn=e.currentTarget;
+  if(Date.now()-clearArmed>4000){clearArmed=Date.now();btn.textContent="再按一次確認";setTimeout(()=>{btn.textContent="清空"},4000);return}
+  clearArmed=0;btn.textContent="清空";segs=[];sections=[{title:"",start:0,summary:"",t:0}];viewSec=null;knownSpeakers=[];minutes="";$("minMeta").textContent="按「產生會議記錄」，會依目前完整的逐字稿整理成正式記錄。";summary="";sumIdx=0;sumOff=0;trIdx=0;$("trEmpty").hidden=false;
+  $("sumMeta").textContent="已清空。";renderAll();persist();
+});
+$("pasteBtn").addEventListener("click",()=>{
+  const v=$("paste").value.trim();if(!v)return;const now=Date.now();
+  v.split(/\n+/).forEach(line=>{line=line.trim();if(!line)return;closeLast();segs.push({t:now,text:line,closed:true,tr:{}});renderSeg(segs.length-1)});
+  $("paste").value="";refreshMeta();persist();
+});
+$("testBtn").addEventListener("click",async()=>{
+  const n=$("keyNote");n.className="hint";n.textContent="測試中…";
+  try{const t=await gemini([{text:"請只回覆兩個字：就緒"}]);n.className="hint ok";n.textContent="金鑰可用，模型回覆："+(t||"（空白）")}
+  catch(err){n.className="hint bad";n.textContent="測試失敗："+err.message}
+  persist();
+});
+
+setInterval(()=>{
+  setStatus();
+  const now=Date.now(),last=segs[segs.length-1];
+  if(last&&!last.closed&&now-lastFinalAt>9000)last.closed=true;
+  if(running){
+    if(engineInUse!=="gemini"&&!recRestart&&now-lastLoudAt<4000&&now-lastRecAt>12000){lastRecAt=now;restartChrome()}   // 有聲音卻沒出字：重啟辨識
+    if(now-lastLoudAt>30000&&now-startedAt>30000&&!silentWarned){silentWarned=true;banner($("srcMode").value==="mic"?"已經 30 秒沒有收到聲音。請確認麥克風沒有被靜音，並靠近發言者。":"已經 30 秒沒有收到直播的聲音。請確認直播正在播放、沒有靜音，而且分享時有勾選「同時分享分頁音訊」。")}
+    else if(silentWarned&&now-lastLoudAt<3000){silentWarned=false;banner("")}
+  }
+  const every=Number($("every").value);
+  if(apiKey()&&every>0&&!sumBusy&&now>=sumNext&&pendingChars()>=150&&(now-lastSumAt)>=every*1000)runSummary(false);
+  if(now>=trNext)runTranslate();
+},1000);
+})();
+</script>
+</body>
+</html>
