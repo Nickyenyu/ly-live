@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breeze ASR 25 本機辨識測試</title>
+<style>
+:root{--bg:#eef1f4;--surface:#fff;--line:#d5dbe2;--ink:#16202b;--muted:#5a6775;--accent:#1f4e8c;--accent-ink:#fff;--live:#c2352b;--warn-bg:#fff3d6;--warn-ink:#6b4a00;--ok:#1d7a46}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f141a;--surface:#182029;--line:#2b3642;--ink:#e7ecf1;--muted:#94a1ae;--accent:#7db1ee;--accent-ink:#0c1826;--live:#ff7366;--warn-bg:#3a2e10;--warn-ink:#ffd98a;--ok:#6fd39a}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;font-size:17px;line-height:1.65;display:flex;flex-direction:column}
+header{padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+h1{font-size:21px;margin:0}
+header small{color:var(--muted);font-size:14px}
+#banner{display:none;margin:10px 20px 0;padding:11px 14px;border-radius:8px;background:var(--warn-bg);color:var(--warn-ink);font-weight:500}
+#banner.show{display:block}
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr) minmax(0,1fr);gap:14px;padding:14px 20px 20px}
+.col{background:var(--surface);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 14px;border-bottom:1px solid var(--line)}
+.head h2{font-size:18px;margin:0;flex:1}
+.body{flex:1;min-height:0;overflow-y:auto;padding:12px 14px}
+label{display:block;font-size:15px;font-weight:700;margin:16px 0 5px}
+label:first-child{margin-top:0}
+select,input[type=file]{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 9px}
+button{font:inherit;font-size:15px;font-weight:500;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:7px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700;padding:10px 12px;width:100%;font-size:16px}
+button.primary:hover{color:var(--accent-ink);filter:brightness(1.1)}
+.row{display:flex;gap:8px;margin-top:8px}
+.row button{flex:1}
+.hint{font-size:14px;color:var(--muted);margin:6px 0 0}
+.hint.ok{color:var(--ok)}.hint.bad{color:var(--live)}
+progress{width:100%;height:10px;margin-top:8px}
+.seg{padding:8px 0;border-bottom:1px dashed var(--line)}
+.seg time{display:block;color:var(--accent);font-size:13.5px;font-variant-numeric:tabular-nums}
+.seg time b{font-weight:500;color:var(--muted);margin-left:8px}
+.seg time b.slow{color:var(--live);font-weight:700}
+.seg p{margin:2px 0 0;font-size:18px;line-height:1.75;overflow-wrap:anywhere}
+#live{color:var(--muted);font-style:italic;padding-top:8px;min-height:1.6em}
+.empty{color:var(--muted);font-size:15px;margin:0}
+ol{margin:0;padding-left:1.3em;color:var(--muted);font-size:15px}
+ol li{margin-bottom:6px}
+#verdict{margin-top:14px;padding:10px 12px;border-radius:8px;background:var(--bg);font-size:15px}
+@media (max-width:1000px){body{display:block}main{grid-template-columns:1fr}.col{min-height:300px;max-height:80vh}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Breeze ASR 25 本機辨識測試</h1>
+  <small>辨識在這台電腦上進行，不需要金鑰，聲音不會送出。右欄同時顯示 Chrome 雲端辨識作為對照。</small>
+</header>
+<div id="banner" role="alert"></div>
+<main>
+  <section class="col">
+    <div class="head"><h2>設定</h2></div>
+    <div class="body">
+      <label for="variant">1. 模型版本</label>
+      <select id="variant">
+        <option value="webgpu|q4|0">顯示卡加速・標準版（約 1.2 GB，建議）</option>
+        <option value="webgpu|q4f16|1">顯示卡加速・半精度版（約 1.5 GB）</option>
+        <option value="wasm|q8|0">不用顯示卡（約 1.8 GB，非常慢，僅供確認）</option>
+      </select>
+      <div class="row"><button class="primary" id="loadBtn" type="button">下載並載入模型</button></div>
+      <progress id="prog" value="0" max="1" hidden></progress>
+      <textarea id="errBox" readonly hidden style="width:100%;min-height:90px;margin-top:8px;font:13px/1.5 ui-monospace,Menlo,monospace;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px"></textarea>
+      <p class="hint" id="loadNote">第一次需要下載模型，依網路速度約數分鐘到十多分鐘；之後會存在瀏覽器裡，不必重新下載。</p>
+
+      <label for="src">2. 聲音來源</label>
+      <select id="src">
+        <option value="tab">另一個分頁的直播（分享分頁音訊）</option>
+        <option value="mic">這台電腦的麥克風</option>
+      </select>
+      <div class="row">
+        <button id="startBtn" type="button" disabled>開始</button>
+        <button id="stopBtn" type="button" disabled>停止</button>
+      </div>
+      <p class="hint">先把直播開在另一個 Chrome 分頁，按「開始」後選那個分頁，並勾選「同時分享分頁音訊」。</p>
+
+      <label for="file">或：選一個錄音／影片檔</label>
+      <input type="file" id="file" accept="audio/*,video/*">
+      <div class="row">
+        <button id="fileBtn" type="button" disabled>轉錄這個檔案</button>
+        <button id="fileStop" type="button" hidden>取消</button>
+      </div>
+      <p class="hint" id="fileNote">檔案只會由 Breeze 辨識，沒有 Chrome 對照。</p>
+
+      <div id="verdict">尚未開始。每一段會顯示「聲音長度」與「辨識花費時間」，用來判斷這台電腦跟不跟得上直播。</div>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="head"><h2>Breeze ASR 25（本機）</h2><button id="copyA" type="button">複製</button><button id="clearBtn" type="button">清空</button></div>
+    <div class="body" id="bodyA">
+      <div id="emptyA">
+        <p class="empty">使用順序：</p>
+        <ol>
+          <li>用電腦版 Chrome 開啟本頁。</li>
+          <li>按「下載並載入模型」，等到顯示「模型已就緒」。</li>
+          <li>把立院直播開在另一個分頁，回到本頁按「開始」。</li>
+          <li>約每 20 多秒出一段文字，比較這一欄與右欄的差異。</li>
+        </ol>
+      </div>
+      <div id="outA"></div>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="head"><h2>Chrome 雲端辨識（對照）</h2><button id="copyB" type="button">複製</button></div>
+    <div class="body" id="bodyB">
+      <p class="empty" id="emptyB">開始後，這裡會顯示目前工作台備援時使用的 Chrome 辨識結果。</p>
+      <div id="outB"></div>
+      <div id="live"></div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+const $=id=>document.getElementById(id);
+const MODEL="markno5/Breeze-ASR-25-ONNX";
+const LIB="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
+const MAX_SEC=27, MIN_SEC=18;   // Whisper 一次最多處理 30 秒，所以在 18 到 27 秒之間找停頓處切段
+
+/* ---------- 背景執行緒：載入模型與辨識 ---------- */
+const workerSrc=`
+import {pipeline,env} from "${LIB}";
+env.allowLocalModels=false;
+let asr=null;
+self.onmessage=async e=>{
+  const m=e.data;
+  try{
+    if(m.type==="load"){
+      asr=await pipeline("automatic-speech-recognition",m.model,{device:m.device,dtype:m.dtype,use_external_data_format:m.ext,progress_callback:p=>self.postMessage({type:"progress",p})});
+      self.postMessage({type:"ready"});
+    }else if(m.type==="run"){
+      const t=performance.now();
+      const out=await asr(m.audio,{language:"zh",task:"transcribe"});
+      self.postMessage({type:"result",id:m.id,text:(out&&out.text||"").trim(),ms:performance.now()-t});
+    }
+  }catch(err){self.postMessage({type:"error",id:m.id,stage:m.type,message:String(err&&err.message||err)})}
+};`;
+let worker=null,ready=false,loading=false;
+const waiting=new Map();let jobId=0;
+const files={};
+
+function banner(t){const b=$("banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
+function loadNote(t,cls){const n=$("loadNote");n.textContent=t;n.className="hint"+(cls?" "+cls:"")}
+function setButtons(){
+  $("loadBtn").disabled=loading||ready;$("variant").disabled=loading||ready;
+  $("startBtn").disabled=!ready||running||fileBusy;$("stopBtn").disabled=!running;$("fileBtn").disabled=!ready||running||fileBusy;
+}
+function loadModel(){
+  if(loading||ready)return;
+  const [device,dtype,ext]=$("variant").value.split("|");
+  if(worker){try{worker.terminate()}catch(e){}worker=null}
+  Object.keys(files).forEach(k=>delete files[k]);$("errBox").hidden=true;$("prog").value=0;
+  if(device==="webgpu"&&!navigator.gpu){banner("這個瀏覽器或這台電腦不支援顯示卡加速（WebGPU）。請更新 Chrome，或改選「不用顯示卡」版本確認流程。");return}
+  banner("");loading=true;setButtons();$("prog").hidden=false;loadNote("開始下載模型…");
+  try{worker=new Worker(URL.createObjectURL(new Blob([workerSrc],{type:"text/javascript"})),{type:"module"})}
+  catch(e){loading=false;setButtons();banner("無法啟動背景執行緒："+e.message);return}
+  worker.onerror=e=>{loading=false;ready=false;setButtons();$("prog").hidden=true;loadNote("載入失敗：無法啟動辨識程式庫，請檢查網路或公司防火牆是否擋住 cdn.jsdelivr.net 與 huggingface.co。","bad");const eb=$("errBox");eb.value="版本："+$("variant").value+"\nChrome："+navigator.userAgent+"\n錯誤（程式庫）："+(e.message||"未提供訊息");eb.hidden=false};
+  worker.onmessage=e=>{
+    const m=e.data;
+    if(m.type==="progress"){
+      const p=m.p||{};
+      if(p.file&&p.total){files[p.file]={loaded:p.loaded||0,total:p.total}}
+      let l=0,t=0;Object.values(files).forEach(f=>{l+=f.loaded;t+=f.total});
+      if(t){$("prog").value=l/t;loadNote("下載中："+(l/1048576).toFixed(0)+"／"+(t/1048576).toFixed(0)+" MB"+(p.status==="ready"?"，正在啟動模型…":""))}
+    }else if(m.type==="ready"){
+      loading=false;ready=true;$("prog").hidden=true;loadNote("模型已就緒，可以開始。","ok");setButtons();
+    }else if(m.type==="result"){
+      const r=waiting.get(m.id);if(r){waiting.delete(m.id);r.resolve(m)}
+    }else if(m.type==="error"){
+      if(m.stage==="load"){loading=false;ready=false;$("prog").hidden=true;setButtons();loadNote("載入失敗。請改選另一個模型版本再按一次；仍失敗時，請把下方框內的文字整段複製回報。","bad");const eb=$("errBox");eb.value="版本："+$("variant").value+"\nChrome："+navigator.userAgent+"\n錯誤："+m.message;eb.hidden=false;banner("模型載入失敗，詳細訊息在左側。")}
+      else{const r=waiting.get(m.id);if(r){waiting.delete(m.id);r.reject(new Error(m.message))}}
+    }
+  };
+  worker.postMessage({type:"load",model:MODEL,device,dtype,ext:ext==="1"});
+}
+function transcribe(f32){
+  return new Promise((resolve,reject)=>{const id=++jobId;waiting.set(id,{resolve,reject});worker.postMessage({type:"run",id,audio:f32},[f32.buffer])});
+}
+
+/* ---------- 顯示 ---------- */
+const pad=n=>String(n).padStart(2,"0");
+const clock=ms=>{const d=new Date(ms);return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds())};
+const hms=s=>{s=Math.max(0,Math.floor(s));return pad(Math.floor(s/3600))+":"+pad(Math.floor(s%3600/60))+":"+pad(s%60)};
+const near=el=>el.scrollHeight-el.scrollTop-el.clientHeight<140;
+let stats={audio:0,work:0,n:0,queue:0};
+function addSeg(out,body,label,text,extra,slow){
+  const stick=near(body),d=document.createElement("div");d.className="seg";
+  const t=document.createElement("time");t.textContent=label;
+  if(extra){const b=document.createElement("b");b.textContent=extra;if(slow)b.className="slow";t.append(b)}
+  const p=document.createElement("p");p.textContent=text;d.append(t,p);out.append(d);
+  if(stick)body.scrollTop=body.scrollHeight;
+}
+function showVerdict(){
+  if(!stats.n){$("verdict").textContent="尚未開始。每一段會顯示「聲音長度」與「辨識花費時間」，用來判斷這台電腦跟不跟得上直播。";return}
+  const ratio=stats.work/stats.audio;
+  const msg=ratio<0.6?"這台電腦跟得上直播，還有餘裕。":ratio<0.95?"勉強跟得上直播，其他程式吃效能時可能落後。":"這台電腦跟不上直播，文字會越來越落後；只適合事後轉錄檔案。";
+  $("verdict").textContent="已完成 "+stats.n+" 段｜平均每 1 秒聲音需要 "+ratio.toFixed(2)+" 秒辨識｜等待中 "+stats.queue+" 段。"+msg;
+}
+
+/* ---------- 切段後依序送給模型 ---------- */
+let chain=Promise.resolve();
+function enqueue(f32,label,sec){
+  stats.queue++;showVerdict();
+  chain=chain.then(async()=>{
+    try{
+      const r=await transcribe(f32);
+      stats.audio+=sec;stats.work+=r.ms/1000;stats.n++;stats.queue--;
+      $("emptyA").hidden=true;
+      addSeg($("outA"),$("bodyA"),label,r.text||"（這一段沒有辨識到語音）","聲音 "+sec.toFixed(0)+" 秒｜辨識 "+(r.ms/1000).toFixed(1)+" 秒",r.ms/1000>sec);
+    }catch(err){stats.queue--;addSeg($("outA"),$("bodyA"),label,"（這一段辨識失敗："+err.message+"）")}
+    showVerdict();
+  });
+  return chain;
+}
+function rms(a,from,to,step){let s=0,n=0;for(let i=from;i<to;i+=step){s+=a[i]*a[i];n++}return Math.sqrt(s/Math.max(1,n))}
+
+/* ---------- 直播／麥克風 ---------- */
+let running=false,stream=null,track=null,actx=null,proc=null,pcm=[],pcmLen=0,chunkStart=0,lastLoud=0,timer=null,rec=null,recTimer=null,fileBusy=false,fileCancel=false;
+async function start(){
+  if(running||!ready)return;banner("");
+  try{
+    stream=$("src").value==="mic"
+      ?await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true}})
+      :await navigator.mediaDevices.getDisplayMedia({video:true,audio:true,systemAudio:"include"});
+  }catch(e){banner("沒有開始：你取消了分享，或 Chrome 沒有允許。");return}
+  track=stream.getAudioTracks()[0]||null;
+  if(!track){stream.getTracks().forEach(t=>t.stop());stream=null;banner("沒有擷取到聲音。請在分享視窗選「Chrome 分頁」，並勾選「同時分享分頁音訊」。");return}
+  stream.getVideoTracks().forEach(t=>{t.enabled=false});
+  track.addEventListener("ended",()=>{if(running){stop();banner("聲音來源已中斷。")}});
+  running=true;setButtons();
+  actx=new AudioContext({sampleRate:16000});try{actx.resume()}catch(e){}
+  const src=actx.createMediaStreamSource(new MediaStream([track]));
+  proc=actx.createScriptProcessor(4096,1,1);pcm=[];pcmLen=0;chunkStart=Date.now();lastLoud=Date.now();
+  proc.onaudioprocess=e=>{const d=e.inputBuffer.getChannelData(0);if(rms(d,0,d.length,32)>0.008)lastLoud=Date.now();pcm.push(new Float32Array(d));pcmLen+=d.length};
+  const mute=actx.createGain();mute.gain.value=0;src.connect(proc);proc.connect(mute);mute.connect(actx.destination);
+  timer=setInterval(()=>{const el=(Date.now()-chunkStart)/1000;if(el>=MAX_SEC||(el>=MIN_SEC&&Date.now()-lastLoud>350))flush()},200);
+  startChrome();
+}
+function flush(){
+  const cut=Date.now();
+  if(!pcmLen){chunkStart=cut;return}
+  const all=new Float32Array(pcmLen);let o=0;pcm.forEach(a=>{all.set(a,o);o+=a.length});pcm=[];pcmLen=0;
+  const sec=all.length/16000,t0=cut-sec*1000;chunkStart=cut;
+  if(sec<1.5||rms(all,0,all.length,16)<0.004)return;      // 太短或幾乎無聲就不送
+  enqueue(all,clock(t0),sec);
+}
+function stop(){
+  running=false;if(timer){clearInterval(timer);timer=null}
+  flush();
+  if(recTimer){clearTimeout(recTimer);recTimer=null}
+  if(rec){const r=rec;rec=null;try{r.onend=null;r.abort()}catch(e){}}
+  if(proc){try{proc.disconnect()}catch(e){}proc=null}
+  if(actx){try{actx.close()}catch(e){}actx=null}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  track=null;$("live").textContent="";setButtons();
+}
+function startChrome(){
+  recTimer=null;
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!running||!track)return;
+  if(!SR){$("emptyB").textContent="這個瀏覽器沒有內建語音辨識，無法顯示對照。";return}
+  const r=new SR();rec=r;r.lang="cmn-Hant-TW";r.continuous=true;r.interimResults=true;
+  r.onresult=e=>{
+    let interim="";
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const res=e.results[i],txt=(res[0]&&res[0].transcript||"").trim();if(!txt)continue;
+      if(res.isFinal){$("emptyB").hidden=true;addSeg($("outB"),$("bodyB"),clock(Date.now()),txt)}else interim+=txt;
+    }
+    $("live").textContent=interim;
+  };
+  r.onerror=()=>{};
+  r.onend=()=>{if(rec!==r)return;rec=null;if(running)recTimer=setTimeout(startChrome,300)};
+  try{r.start(track)}catch(e){rec=null;$("emptyB").textContent="這個版本的 Chrome 不支援辨識分頁聲音，無法顯示對照。"}
+}
+
+/* ---------- 檔案 ---------- */
+function fileNote(t,cls){const n=$("fileNote");n.textContent=t;n.className="hint"+(cls?" "+cls:"")}
+async function runFile(){
+  const f=$("file").files[0];
+  if(!f){fileNote("請先選擇檔案。","bad");return}
+  if(fileBusy||running||!ready)return;
+  fileBusy=true;fileCancel=false;$("fileStop").hidden=false;setButtons();
+  try{
+    fileNote("讀取與解碼中…");
+    let ab;
+    try{ab=await new OfflineAudioContext(1,16000,16000).decodeAudioData(await f.arrayBuffer())}
+    catch(e){throw new Error("無法讀取這個檔案，請先轉成 m4a 或 mp3 再試。")}
+    const sr=ab.sampleRate,ch=ab.numberOfChannels,total=ab.length,d0=ab.getChannelData(0),began=Date.now();
+    let a=0,b=0;
+    for(;b<total&&!fileCancel;a=b){
+      b=Math.min(total,a+MAX_SEC*sr);
+      if(b<total){                                   // 在 18 到 27 秒之間找最安靜的地方切
+        const fr=Math.round(0.2*sr),hop=Math.round(0.1*sr),hi=Math.min(total-fr,a+MAX_SEC*sr);let best=Infinity;
+        for(let q=a+MIN_SEC*sr;q<hi;q+=hop){let e=0;for(let i=q;i<q+fr;i+=4)e+=d0[i]*d0[i];if(e<best){best=e;b=q+(fr>>1)}}
+        if(total-b<2*sr)b=total;
+      }
+      const mono=new Float32Array(b-a);
+      for(let c=0;c<ch;c++){const d=ab.getChannelData(c);for(let i=a;i<b;i++)mono[i-a]+=d[i]/ch}
+      fileNote("轉錄中："+hms(a/sr)+"／"+hms(total/sr));
+      if(rms(mono,0,mono.length,16)<0.003)continue;
+      await enqueue(mono,hms(a/sr),(b-a)/sr);
+    }
+    fileNote(fileCancel?"已取消，完成的部分保留在中間欄。":"完成。全長 "+hms(total/sr)+"，總共花了 "+hms((Date.now()-began)/1000)+"。","ok");
+  }catch(err){fileNote(err.message||"處理失敗","bad")}
+  fileBusy=false;$("fileStop").hidden=true;setButtons();
+}
+
+/* ---------- 事件 ---------- */
+const textOf=out=>Array.from(out.querySelectorAll(".seg")).map(s=>"["+s.querySelector("time").firstChild.textContent+"] "+s.querySelector("p").textContent).join("\n");
+async function copy(out,btn){const old=btn.textContent;try{await navigator.clipboard.writeText(textOf(out));btn.textContent="已複製"}catch(e){btn.textContent="複製失敗"}setTimeout(()=>{btn.textContent=old},1500)}
+$("loadBtn").addEventListener("click",loadModel);
+$("startBtn").addEventListener("click",start);
+$("stopBtn").addEventListener("click",()=>{stop();banner("")});
+$("fileBtn").addEventListener("click",runFile);
+$("fileStop").addEventListener("click",()=>{fileCancel=true;fileNote("取消中，等目前這一段結束…")});
+$("copyA").addEventListener("click",e=>copy($("outA"),e.currentTarget));
+$("copyB").addEventListener("click",e=>copy($("outB"),e.currentTarget));
+$("clearBtn").addEventListener("click",()=>{$("outA").textContent="";$("outB").textContent="";$("emptyA").hidden=false;$("emptyB").hidden=false;stats={audio:0,work:0,n:0,queue:stats.queue};showVerdict()});
+if(!navigator.gpu)banner("這個瀏覽器沒有偵測到顯示卡加速（WebGPU）。請用最新版的電腦版 Chrome 開啟；否則只能選「不用顯示卡」版本，速度會非常慢。");
+setButtons();
+</script>
+</body>
+</html>
