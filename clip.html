@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>質詢精華剪輯台</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<style>
+:root{--bg:#eef1f4;--card:#ffffff;--line:#d5dbe2;--ink:#16202b;--muted:#5a6775;--accent:#1f4e8c;--accent-ink:#fff;--pick:#fff4d6;--pick-line:#e7b93c;--warn:#b4442a;--ok:#2e7d4f;
+--display:"Noto Serif TC","Songti TC","PMingLiU",serif;--body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#0f141a;--card:#161d25;--line:#2b3642;--ink:#e7ecf1;--muted:#94a1ae;--accent:#7db1ee;--accent-ink:#0c1826;--pick:#3a3016;--pick-line:#b8902a;--warn:#f08c72;--ok:#7fd3a0}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--body)}
+header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+h1{font:600 22px var(--display);margin:0}
+header .sub{color:var(--muted);font-size:13px}
+.bar{display:flex;gap:8px;padding:12px 20px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line);background:var(--card)}
+input[type=text],input[type=password],input[type=number],textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+input[type=text]:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;padding:6px 12px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:default}
+button.mini{padding:2px 7px;font-size:13px}
+#url{flex:1;min-width:260px}
+details.settings{padding:0 20px;background:var(--card);border-bottom:1px solid var(--line)}
+details.settings summary{cursor:pointer;padding:8px 0;color:var(--muted);font-size:14px}
+.grid2{display:grid;grid-template-columns:140px 1fr;gap:8px 12px;padding:4px 0 14px;align-items:center}
+.grid2 label{color:var(--muted);font-size:14px}
+.grid2 .hint{grid-column:2;color:var(--muted);font-size:12px;margin-top:-4px}
+main{display:grid;grid-template-columns:minmax(360px,460px) 1fr;gap:16px;padding:16px 20px;align-items:start}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.left{position:sticky;top:10px;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 20px);overflow:auto}
+video{width:100%;background:#000;border-radius:8px;aspect-ratio:16/9}
+.meta{font-size:13px;color:var(--muted)}
+.status{font-size:13px;color:var(--muted);min-height:1.4em}
+.status.err{color:var(--warn)} .status.ok{color:var(--ok)}
+h2{font:600 16px var(--display);margin:0 0 8px}
+.total{font-size:14px;margin:6px 0}
+.total b{font-size:18px}
+.seg{border:1px solid var(--line);border-radius:8px;padding:8px;margin:8px 0}
+.seg .row1{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.seg input{width:100%;margin-top:6px}
+.nudge{display:inline-flex;gap:2px;align-items:center}
+.speakers .sp{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0;align-items:center;font-size:13px}
+.speakers .sp span{color:var(--muted)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#list{display:flex;flex-direction:column;gap:2px}
+.ln{display:grid;grid-template-columns:26px 62px 130px 1fr;gap:6px;align-items:center;padding:3px 6px;border-radius:6px;border-left:3px solid transparent}
+.ln:hover{background:var(--bg)}
+.ln.pick{background:var(--pick);border-left-color:var(--pick-line)}
+.ln.now{outline:1px dashed var(--accent)}
+.ln .t{font:12px ui-monospace,Menlo,monospace;color:var(--accent);background:none;border:none;padding:0;text-align:left;cursor:pointer}
+.ln input[type=text]{padding:3px 6px;width:100%;background:transparent;border-color:transparent}
+.ln input[type=text]:hover{border-color:var(--line)}
+.ln .spk{font-size:13px;color:var(--muted)}
+.ln.gap{margin-top:10px}
+.listhead{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:13px;color:var(--muted)}
+#exportBox{display:none}
+#exportBox textarea{width:100%;height:120px;font:12px ui-monospace,Menlo,monospace}
+ol.steps{margin:6px 0 0;padding-left:20px;font-size:14px}
+.empty{color:var(--muted);padding:30px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>質詢精華剪輯台</h1>
+  <span class="sub">貼上 IVOD 網址 → 勾選逐字稿 → 校對字幕 → 產生剪輯清單交給雲端剪片</span>
+</header>
+
+<div class="bar">
+  <input type="text" id="url" placeholder="IVOD 網址或編號，例如 https://ivod.ly.gov.tw/Play/Clip/1M/171680">
+  <button class="primary" id="load">載入</button>
+  <span class="status" id="loadStatus"></span>
+</div>
+
+<details class="settings" id="settings">
+  <summary>設定（Gemini 金鑰、詞庫、剪片空間）</summary>
+  <div class="grid2">
+    <label for="key">Gemini 金鑰</label>
+    <input type="password" id="key" placeholder="只在「AI 校字」時使用；會沿用逐字稿工具已存的金鑰">
+    <label for="glossary">專有名詞詞庫</label>
+    <textarea id="glossary" rows="3" placeholder="一行或用頓號分隔，例如：美德眠、史蒂諾斯、腸泌素、食藥署"></textarea>
+    <span class="hint">AI 校字時會優先採用這些寫法。</span>
+    <label for="repo">剪片空間</label>
+    <input type="text" id="repo" placeholder="GitHub 帳號/repo，例如 Nickyenyu/ly-clips">
+    <label for="target">目標長度（秒）</label>
+    <input type="number" id="target" min="30" max="600" step="10" style="width:120px">
+  </div>
+</details>
+
+<main id="main" hidden>
+  <section class="left">
+    <div class="card">
+      <video id="video" controls playsinline></video>
+      <div class="meta" id="meta"></div>
+    </div>
+
+    <div class="card">
+      <h2>剪輯內容</h2>
+      <div class="total">已選 <b id="tSec">0</b> 秒／目標 <span id="tTarget">180</span> 秒，共 <span id="tSeg">0</span> 段</div>
+      <label class="meta" for="headline">影片標題（16 字以內較好讀）</label>
+      <input type="text" id="headline" style="width:100%">
+      <label class="meta" for="info">副標</label>
+      <input type="text" id="info" style="width:100%">
+      <div id="segs"></div>
+      <div class="tools">
+        <button id="previewAll">▶ 依序預覽全部</button>
+        <button id="aiFix">AI 校字（已選句子）</button>
+        <button class="primary" id="export">產生剪輯清單</button>
+      </div>
+      <div class="status" id="aiStatus"></div>
+    </div>
+
+    <div class="card" id="exportBox">
+      <h2>剪輯清單</h2>
+      <textarea id="planText" readonly></textarea>
+      <div class="tools">
+        <button class="primary" id="copyPlan">複製清單</button>
+        <a id="ghLink" target="_blank" rel="noopener"><button>開啟 GitHub 剪片頁</button></a>
+      </div>
+      <ol class="steps">
+        <li>按「複製清單」。</li>
+        <li>開啟 GitHub 剪片頁，按右側「Run workflow」。</li>
+        <li>在「剪輯清單」欄位貼上，按綠色的「Run workflow」。</li>
+        <li>約 3–5 分鐘後，到該次執行頁面最下方下載 highlight。</li>
+      </ol>
+      <div class="status" id="copyStatus"></div>
+    </div>
+
+    <div class="card speakers">
+      <h2>發言者名稱</h2>
+      <div class="meta">左邊是系統辨識的名稱，右邊改成要顯示在影片上的寫法，會套用到全部句子。</div>
+      <div id="spList"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="listhead">
+      <span>逐字稿（來源：立法院 API 的 AI 逐字稿，可直接修改）</span>
+      <span>點時間播放；勾選要剪的句子，按住 Shift 可連續勾選</span>
+      <button class="mini" id="clearPick">清除勾選</button>
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
+<div class="empty" id="empty">貼上 IVOD 網址後按「載入」。</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const API = "https://ly.govapi.tw/v2/ivods/";
+const LIVE_KEY = "ly-workbench-pages-v1";   // 逐字稿工具的設定（同網域共用金鑰與詞庫）
+const PREF_KEY = "ly-clip-prefs-v1";
+const MODELS = ["gemini-3.5-flash", "gemini-3.5-flash-lite"];
+const TITLES = "委員|部長|次長|政務次長|常務次長|署長|副署長|司長|副司長|主委|主任委員|副主委|局長|處長|院長|副院長|主席|召委|署長|執行長|主任|組長";
+
+let S = null;          // 目前載入的影片狀態
+let lastPick = -1;     // Shift 連選用
+let stopAt = null;     // 預覽停止時間
+let queue = [];        // 依序預覽
+let hls = null;
+
+/* ---------- 設定 ---------- */
+function loadPrefs() {
+  let p = {};
+  try { p = JSON.parse(localStorage.getItem(PREF_KEY) || "{}"); } catch (e) {}
+  let live = {};
+  try { live = JSON.parse(localStorage.getItem(LIVE_KEY) || "{}") || {}; } catch (e) {}
+  $("key").value = p.key || live.key || "";
+  $("glossary").value = p.glossary || live.glossary || "";
+  $("repo").value = p.repo || "Nickyenyu/ly-clips";
+  $("target").value = p.target || 180;
+}
+function savePrefs() {
+  try {
+    localStorage.setItem(PREF_KEY, JSON.stringify({
+      key: $("key").value.trim(), glossary: $("glossary").value,
+      repo: $("repo").value.trim(), target: +$("target").value || 180 }));
+  } catch (e) {}
+}
+["key", "glossary", "repo", "target"].forEach(id => $(id).addEventListener("change", () => { savePrefs(); render(); }));
+
+/* ---------- 工具 ---------- */
+const fmt = t => { t = Math.max(0, t); const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`; };
+const r2 = x => Math.round(x * 100) / 100;
+function status(id, msg, kind) { const el = $(id); el.textContent = msg || ""; el.className = "status" + (kind ? " " + kind : ""); }
+function ivodId(s) { const m = String(s).trim().match(/(\d{4,})\s*\/?\s*$/); return m ? m[1] : null; }
+function prettyName(n) {
+  n = String(n || "").trim();
+  if (!n || /^SPEAKER_/i.test(n)) return "";
+  const m = n.match(new RegExp(`^(.)(${TITLES})(.+)$`));
+  return m ? m[1] + m[3] + m[2] : n;
+}
+function stateKey(id) { return "ly-clip-state-v1:" + id; }
+function saveState() {
+  if (!S) return;
+  try {
+    localStorage.setItem(stateKey(S.id), JSON.stringify({
+      text: S.lines.map(l => l.text), spk: S.lines.map(l => l.spkRaw),
+      pick: [...S.pick], adj: S.adj, labels: S.labels, names: S.names,
+      headline: $("headline").value, info: $("info").value }));
+  } catch (e) {}
+}
+
+/* ---------- 載入 ---------- */
+async function load() {
+  const id = ivodId($("url").value);
+  if (!id) { status("loadStatus", "看不出 IVOD 編號，請貼上完整的 IVOD 播放頁網址。", "err"); return; }
+  status("loadStatus", "讀取立法院資料中……");
+  let d;
+  try {
+    const r = await fetch(API + id);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    d = (await r.json()).data;
+  } catch (e) { status("loadStatus", "讀取失敗：" + e.message + "。請稍後再試。", "err"); return; }
+  const wx = d && d.transcript && d.transcript.whisperx;
+  if (!wx || !wx.length) { status("loadStatus", "這支影片立法院目前還沒有提供 AI 逐字稿，請過一段時間再試。", "err"); return; }
+  const py = (d.transcript.pyannote || []);
+
+  const lines = wx.map(w => {
+    let best = "", bestOv = 0;
+    for (const p of py) {
+      const ov = Math.min(w.end, p.end) - Math.max(w.start, p.start);
+      if (ov > bestOv) { bestOv = ov; best = p.speaker_name || p.speaker; }
+    }
+    return { start: +w.start, end: +w.end, text: String(w.text || "").trim(), spkRaw: best };
+  });
+  for (let i = 0; i < lines.length; i++) if (!lines[i].spkRaw && i) lines[i].spkRaw = lines[i - 1].spkRaw;
+
+  const raws = [...new Set(lines.map(l => l.spkRaw).filter(Boolean))];
+  const names = {}; raws.forEach(r => names[r] = prettyName(r));
+  const committee = ((d["會議資料"] || {})["委員會代碼:str"] || [])[0] || "";
+  S = { id, data: d, lines, pick: new Set(), adj: {}, labels: {}, names,
+        info: `${d["委員名稱"] || ""}委員質詢｜${committee}｜${d["日期"] || ""}`,
+        headline: `${d["委員名稱"] || ""}委員質詢精華` };
+
+  try {   // 還原先前的編輯
+    const old = JSON.parse(localStorage.getItem(stateKey(id)) || "null");
+    if (old && old.text && old.text.length === lines.length) {
+      old.text.forEach((t, i) => lines[i].text = t);
+      (old.spk || []).forEach((s, i) => { if (s) lines[i].spkRaw = s; });
+      S.pick = new Set(old.pick || []); S.adj = old.adj || {}; S.labels = old.labels || {};
+      Object.assign(S.names, old.names || {});
+      S.headline = old.headline || S.headline; S.info = old.info || S.info;
+      status("loadStatus", "已載入，並還原你上次的勾選與修改。", "ok");
+    } else status("loadStatus", `已載入 ${lines.length} 句逐字稿。`, "ok");
+  } catch (e) { status("loadStatus", `已載入 ${lines.length} 句逐字稿。`, "ok"); }
+
+  $("headline").value = S.headline; $("info").value = S.info;
+  $("meta").textContent = `${d["會議名稱"] || ""}（${d["委員發言時間"] || ""}，${d["影片長度"] || ""}）`;
+  $("main").hidden = false; $("empty").hidden = true;
+  setupVideo(d.video_url);
+  buildList(); render();
+  history.replaceState(null, "", "?ivod=" + id);
+}
+
+function setupVideo(src) {
+  const v = $("video");
+  if (hls) { hls.destroy(); hls = null; }
+  if (window.Hls && Hls.isSupported()) { hls = new Hls(); hls.loadSource(src); hls.attachMedia(v); }
+  else v.src = src;   // Safari 原生支援
+}
+
+/* ---------- 逐字稿列表 ---------- */
+function buildList() {
+  const box = $("list"); box.textContent = "";
+  S.lines.forEach((l, i) => {
+    const row = document.createElement("div"); row.className = "ln"; row.dataset.i = i;
+    if (i && l.start - S.lines[i - 1].end > 3) row.classList.add("gap");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.title = "勾選要剪的句子";
+    cb.addEventListener("click", e => togglePick(i, cb.checked, e.shiftKey));
+    const t = document.createElement("button"); t.className = "t"; t.textContent = fmt(l.start);
+    t.title = "從這裡播放"; t.addEventListener("click", () => play(l.start, null));
+    const sp = document.createElement("span"); sp.className = "spk";
+    const tx = document.createElement("input"); tx.type = "text"; tx.value = l.text;
+    tx.addEventListener("input", () => { l.text = tx.value; saveState(); });
+    row.append(cb, t, sp, tx); box.append(row);
+  });
+  refreshList();
+}
+function refreshList() {
+  const rows = $("list").children;
+  for (const row of rows) {
+    const i = +row.dataset.i, l = S.lines[i];
+    row.classList.toggle("pick", S.pick.has(i));
+    row.children[0].checked = S.pick.has(i);
+    row.children[2].textContent = S.names[l.spkRaw] || "";
+    row.children[2].title = l.spkRaw || "";
+    if (row.children[3].value !== l.text) row.children[3].value = l.text;
+  }
+}
+function togglePick(i, on, shift) {
+  if (shift && lastPick >= 0) {
+    const [a, b] = [Math.min(lastPick, i), Math.max(lastPick, i)];
+    for (let k = a; k <= b; k++) on ? S.pick.add(k) : S.pick.delete(k);
+  } else on ? S.pick.add(i) : S.pick.delete(i);
+  lastPick = i; saveState(); refreshList(); render();
+}
+
+/* ---------- 段落 ---------- */
+function segments() {
+  const idx = [...S.pick].sort((a, b) => a - b), out = [];
+  for (const i of idx) {
+    const last = out[out.length - 1];
+    if (last && i === last.to + 1) last.to = i; else out.push({ from: i, to: i });
+  }
+  return out.map(sg => {
+    const a = S.adj[sg.from] || { s: 0, e: 0 };
+    return { ...sg, start: Math.max(0, S.lines[sg.from].start + a.s), end: S.lines[sg.to].end + a.e,
+             label: S.labels[sg.from] || "" };
+  });
+}
+function render() {
+  if (!S) return;
+  const segs = segments(), total = segs.reduce((a, s) => a + (s.end - s.start), 0);
+  const target = +$("target").value || 180;
+  $("tSec").textContent = Math.round(total); $("tTarget").textContent = target; $("tSeg").textContent = segs.length;
+  $("tSec").style.color = total > target * 1.1 ? "var(--warn)" : "";
+  const box = $("segs"); box.textContent = "";
+  segs.forEach((sg, n) => {
+    const d = document.createElement("div"); d.className = "seg";
+    const r1 = document.createElement("div"); r1.className = "row1";
+    const title = document.createElement("span");
+    title.textContent = `第 ${n + 1} 段　${fmt(sg.start)}–${fmt(sg.end)}（${Math.round(sg.end - sg.start)} 秒，${sg.to - sg.from + 1} 句）`;
+    const pv = mk("▶ 預覽", () => play(sg.start, sg.end));
+    r1.append(title, pv, nudge("開頭", sg.from, "s"), nudge("結尾", sg.from, "e"));
+    const lab = document.createElement("input"); lab.type = "text"; lab.placeholder = "段落小標（選填，顯示在畫面上方，8 字內）";
+    lab.value = sg.label; lab.addEventListener("input", () => { S.labels[sg.from] = lab.value; saveState(); });
+    d.append(r1, lab); box.append(d);
+  });
+  if (!segs.length) { const p = document.createElement("div"); p.className = "meta"; p.textContent = "在右側逐字稿勾選句子，這裡會自動整理成段落。"; box.append(p); }
+  buildSpeakers();
+}
+function mk(label, fn) { const b = document.createElement("button"); b.className = "mini"; b.textContent = label; b.addEventListener("click", fn); return b; }
+function nudge(name, from, key) {
+  const w = document.createElement("span"); w.className = "nudge";
+  const a = S.adj[from] || { s: 0, e: 0 };
+  const lab = document.createElement("span"); lab.textContent = `${name}${a[key] ? (a[key] > 0 ? "+" : "") + a[key].toFixed(1) : ""}`;
+  w.append(lab,
+    mk("−0.5", () => { const x = S.adj[from] || { s: 0, e: 0 }; x[key] = r2(x[key] - 0.5); S.adj[from] = x; saveState(); render(); }),
+    mk("+0.5", () => { const x = S.adj[from] || { s: 0, e: 0 }; x[key] = r2(x[key] + 0.5); S.adj[from] = x; saveState(); render(); }));
+  w.title = key === "s" ? "往前（−）或往後（+）調整這段的開始點" : "往前（−）或往後（+）調整這段的結束點";
+  return w;
+}
+function buildSpeakers() {
+  const box = $("spList"); box.textContent = "";
+  Object.keys(S.names).forEach(raw => {
+    const row = document.createElement("div"); row.className = "sp";
+    const a = document.createElement("span"); a.textContent = raw;
+    const b = document.createElement("input"); b.type = "text"; b.value = S.names[raw];
+    b.placeholder = "例：林淑芬委員";
+    b.addEventListener("change", () => { S.names[raw] = b.value.trim(); saveState(); refreshList(); });
+    row.append(a, b); box.append(row);
+  });
+}
+$("headline").addEventListener("input", saveState);
+$("info").addEventListener("input", saveState);
+$("clearPick").addEventListener("click", () => { if (S && confirmClear()) { S.pick.clear(); saveState(); refreshList(); render(); } });
+function confirmClear() { return S.pick.size < 5 || window.confirm("確定要清除全部勾選嗎？"); }
+
+/* ---------- 播放與預覽 ---------- */
+function play(t, end) {
+  const v = $("video"); queue = []; stopAt = end; v.currentTime = t; v.play().catch(() => {});
+}
+$("previewAll").addEventListener("click", () => {
+  const segs = segments(); if (!segs.length) return;
+  queue = segs.slice(1); stopAt = segs[0].end; const v = $("video"); v.currentTime = segs[0].start; v.play().catch(() => {});
+});
+$("video").addEventListener("timeupdate", () => {
+  const v = $("video");
+  if (stopAt != null && v.currentTime >= stopAt) {
+    if (queue.length) { const n = queue.shift(); stopAt = n.end; v.currentTime = n.start; }
+    else { v.pause(); stopAt = null; }
+  }
+  if (!S) return;   // 標示目前播放到的句子
+  const rows = $("list").children; const t = v.currentTime;
+  for (const row of rows) { const l = S.lines[+row.dataset.i]; row.classList.toggle("now", t >= l.start && t < l.end); }
+});
+
+/* ---------- AI 校字 ---------- */
+$("aiFix").addEventListener("click", aiFix);
+async function aiFix() {
+  const key = $("key").value.trim();
+  if (!key) { $("settings").open = true; status("aiStatus", "請先在「設定」填入 Gemini 金鑰。", "err"); return; }
+  const idx = [...S.pick].sort((a, b) => a - b);
+  if (!idx.length) { status("aiStatus", "請先勾選要校字的句子。", "err"); return; }
+  const gl = $("glossary").value.split(/[\n、,，]+/).map(s => s.trim()).filter(Boolean);
+  const speakers = [...new Set(Object.values(S.names).filter(Boolean))];
+  const listing = idx.map((i, n) => `${n + 1}. ${S.names[S.lines[i].spkRaw] || "未知"}：${S.lines[i].text}`).join("\n");
+  const prompt = `以下是立法院質詢的語音辨識逐字稿（${$("info").value}），每行是一句字幕。請逐行校正錯字，輸出 JSON。
+規則：
+- 行數與順序必須和原文完全相同，不可合併、拆行或增刪內容，只修正錯字、同音字與簡體字。
+- 使用繁體中文與台灣用語；保留口語，不要改寫成書面語；不加句尾標點，句中可用全形逗號。
+- 本場發言者：${speakers.join("、") || "未提供"}。
+- ${gl.length ? "專有名詞以此詞庫為準：" + gl.join("、") : "專有名詞務必正確。"}
+- 另外請給一個 16 字以內的影片標題 headline，概括這些內容的重點。
+原文：
+${listing}`;
+  const schema = { type: "OBJECT", required: ["lines", "headline"], properties: {
+    headline: { type: "STRING" }, lines: { type: "ARRAY", items: { type: "STRING" } } } };
+  $("aiFix").disabled = true;
+  try {
+    let out = null, lastErr = "";
+    for (const model of MODELS) {
+      for (let k = 0; k < 3 && !out; k++) {
+        status("aiStatus", `AI 校字中（${model}，第 ${k + 1} 次）……`);
+        try {
+          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+            method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+            body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: "application/json", responseSchema: schema } }) });
+          if (!r.ok) { lastErr = "HTTP " + r.status; if ([429, 500, 503].includes(r.status)) { await new Promise(z => setTimeout(z, 4000 * (k + 1))); continue; } break; }
+          const j = await r.json();
+          const txt = (j.candidates[0].content.parts || []).filter(p => !p.thought).map(p => p.text || "").join("");
+          out = JSON.parse(txt);
+        } catch (e) { lastErr = e.message; }
+      }
+      if (out) break;
+    }
+    if (!out) throw new Error(lastErr || "沒有回應");
+    if (!Array.isArray(out.lines) || out.lines.length !== idx.length) throw new Error("AI 回傳的行數不符，未套用，請再試一次");
+    let changed = 0;
+    idx.forEach((i, n) => { const t = String(out.lines[n] || "").trim(); if (t && t !== S.lines[i].text) { S.lines[i].text = t; changed++; } });
+    if (out.headline && (!$("headline").value || /質詢精華$/.test($("headline").value))) $("headline").value = out.headline;
+    saveState(); refreshList();
+    status("aiStatus", `完成：修正 ${changed} 句。` + (out.headline ? `建議標題：「${out.headline}」` : ""), "ok");
+  } catch (e) {
+    status("aiStatus", "AI 校字失敗：" + e.message + "。逐字稿仍可手動修改。", "err");
+  } finally { $("aiFix").disabled = false; }
+}
+
+/* ---------- 剪輯清單 ---------- */
+$("export").addEventListener("click", () => {
+  const segs = segments();
+  if (!segs.length) { status("copyStatus", ""); status("aiStatus", "請先勾選要剪的句子。", "err"); return; }
+  const plan = { v: 1, ivod_id: +S.id, ivod_url: S.data.IVOD_URL, video_url: S.data.video_url,
+    headline: $("headline").value.trim(), info: $("info").value.trim(),
+    segments: segs.map(sg => ({ start: r2(sg.start), end: r2(sg.end), label: sg.label.trim(),
+      lines: S.lines.slice(sg.from, sg.to + 1).map(l => ({ start: r2(l.start), end: r2(l.end),
+        speaker: S.names[l.spkRaw] || "", text: l.text.trim() })).filter(l => l.text) })) };
+  const txt = JSON.stringify(plan);
+  $("planText").value = txt;
+  $("exportBox").style.display = "block";
+  const repo = $("repo").value.trim() || "Nickyenyu/ly-clips";
+  $("ghLink").href = `https://github.com/${repo}/actions/workflows/render.yml`;
+  status("copyStatus", txt.length > 60000 ? "清單太長（超過 GitHub 上限），請減少段落或句子。" : `清單長度 ${txt.length} 字元。`, txt.length > 60000 ? "err" : "");
+  $("exportBox").scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+$("copyPlan").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("planText").value); status("copyStatus", "已複製，請到 GitHub 剪片頁貼上。", "ok"); }
+  catch (e) { $("planText").select(); status("copyStatus", "無法自動複製，已幫你選取，請按 Ctrl+C／⌘C。", "err"); }
+});
+
+/* ---------- 啟動 ---------- */
+$("load").addEventListener("click", load);
+$("url").addEventListener("keydown", e => { if (e.key === "Enter") load(); });
+loadPrefs();
+const q = new URLSearchParams(location.search).get("ivod");
+if (q) { $("url").value = "https://ivod.ly.gov.tw/Play/Clip/1M/" + q; load(); }
+</script>
+</body>
+</html>
